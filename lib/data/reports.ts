@@ -7,7 +7,8 @@ import {
 } from "@/lib/runway/inventory";
 import type { DishPerformance, Velocity } from "@/lib/runway/types";
 import { createSupabaseServerClient, getCurrentProfile } from "@/lib/supabase/server";
-import { daypartKey } from "@/lib/data/menu";
+import { windowsForDate } from "@/lib/data/menu";
+import type { DaypartWindow } from "@/lib/runway/velocity";
 import { weekdayOf } from "@/lib/runway/velocity";
 import { resolveTimeZone } from "@/lib/runway/clock";
 import type { Station } from "@/lib/ops/tickets";
@@ -171,6 +172,18 @@ export async function getPantry(now: Date = new Date()): Promise<PantryPayload> 
   const profile = await getCurrentProfile();
   const showCost = canSeeCost(profile?.role);
 
+  // The restaurant first, because its timezone decides which weekday to ask for. Reading
+  // the weekday in the SERVER's zone was the other half of this bug: getPantry was the one
+  // reader left that ignored restaurants.timezone, so near midnight it loaded the wrong
+  // day's sell rates entirely.
+  const { data: restaurant } = await supabase
+    .from("restaurants")
+    .select("timezone, service_hours")
+    .limit(1)
+    .single();
+
+  const timeZone = resolveTimeZone(restaurant?.timezone as string | null);
+
   const [{ data: ingredients }, { data: recipes }, { data: velocity }] = await Promise.all([
     supabase
       .from("ingredients")
@@ -179,16 +192,20 @@ export async function getPantry(now: Date = new Date()): Promise<PantryPayload> 
       )
       .order("name"),
     supabase.from("recipe_items").select("dish_id, ingredient_id, qty"),
+    // The WHOLE weekday, both dayparts. Filtering to the current daypart and then
+    // multiplying by a day's worth of hours applies the dinner rush rate to lunchtime.
     supabase
       .from("dish_velocity")
-      .select("dish_id, ewma_units_per_hour")
-      .eq("weekday", now.getDay())
-      .eq("daypart", daypartKey(now)),
+      .select("dish_id, daypart, ewma_units_per_hour")
+      .eq("weekday", weekdayOf(now, timeZone)),
   ]);
 
-  const velByDish = new Map(
-    (velocity ?? []).map((v) => [v.dish_id as string, Number(v.ewma_units_per_hour)]),
-  );
+  // Keyed by dish AND daypart, because a dish sells at different rates over lunch and
+  // dinner, and that difference is the entire reason velocity is stored per daypart.
+  const rateFor = new Map<string, number>();
+  for (const v of velocity ?? []) {
+    rateFor.set(`${v.dish_id as string}:${v.daypart as string}`, Number(v.ewma_units_per_hour));
+  }
 
   // Recipes grouped per dish, so daily usage can be summed across every dish that
   // uses an ingredient — the same maths the reorder point is built on.
@@ -198,17 +215,51 @@ export async function getPantry(now: Date = new Date()): Promise<PantryPayload> 
     list.push({ ingredientId: r.ingredient_id as string, qty: Number(r.qty) });
     byDish.set(r.dish_id as string, list);
   }
-  const usage: DishUsage[] = [...byDish.entries()].map(([dishId, recipe]) => ({
-    recipe,
-    unitsPerHour: velByDish.get(dishId) ?? 0,
-  }));
+  /*
+   * Daily usage, summed window by window over the restaurant's REAL service hours.
+   *
+   * It used to be `oneDaypartRate × 11`, where 11 was a hardcoded "11:00 → 22:00" and the
+   * rate came from whichever daypart happened to be current. Two errors in one line:
+   * evaluated at dinner it charged the dinner rush rate to the whole day, and the day was
+   * the wrong length (the seeded Saturday is 11:00–23:00, so twelve hours). Measured
+   * against the shipped figures: King scallops overstated by 18%, red wine understated by
+   * 10% — and the page prints the formula underneath ("daily usage × lead time × 1.2"),
+   * so the arithmetic looks authoritative while the input to it is wrong.
+   *
+   * Falls back to the week's longest trading day when today is closed. "Nothing needs
+   * reordering because we shut on Mondays" is not a useful answer for the person doing
+   * Monday's ordering.
+   */
+  const hoursFor = (w: DaypartWindow) => (w.endMinutes - w.startMinutes) / 60;
+  const totalHours = (ws: DaypartWindow[]) => ws.reduce((h, w) => h + hoursFor(w), 0);
 
-  const OPEN_HOURS = 11; // 11:00 → 22:00, matching the seeded service hours
+  const serviceHours = (restaurant?.service_hours ?? {}) as never;
+  let windows: DaypartWindow[] = windowsForDate(serviceHours, now, timeZone);
+  if (windows.length === 0) {
+    for (let d = 1; d <= 7; d++) {
+      const other = new Date(now);
+      other.setDate(other.getDate() + d);
+      const candidate = windowsForDate(serviceHours, other, timeZone);
+      if (totalHours(candidate) > totalHours(windows)) windows = candidate;
+    }
+  }
+
+  // One DishUsage[] per window, built once rather than per ingredient.
+  const perWindow: { hours: number; usage: DishUsage[] }[] = windows.map((w) => ({
+    hours: hoursFor(w),
+    usage: [...byDish.entries()].map(([dishId, recipe]) => ({
+      recipe,
+      unitsPerHour: rateFor.get(`${dishId}:${w.name}`) ?? 0,
+    })),
+  }));
 
   const rows: PantryRow[] = (ingredients ?? []).map((i) => {
     const supplier = one<{ name: string; lead_time_days: number }>(i.suppliers);
     const leadTimeDays = supplier?.lead_time_days ?? 1;
-    const daily = dailyUsage(i.id as string, usage, OPEN_HOURS);
+    const daily = perWindow.reduce(
+      (sum, w) => sum + dailyUsage(i.id as string, w.usage, w.hours),
+      0,
+    );
     return {
       id: i.id as string,
       name: i.name as string,

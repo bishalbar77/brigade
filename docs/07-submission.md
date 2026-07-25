@@ -188,6 +188,45 @@ The common shape of all three: **a rule was implemented in one of two places tha
 agree**, and nothing compared them. The seed script masked the first two by writing data,
 with the service key, that the product itself could not have produced.
 
+### A third pass, and the worst finding of the build
+
+A six-lens adversarial sweep raised 13 findings and then lost 17 of its 19 agents to an
+auth error before refuting any of them — so its headline "nothing survived" meant nothing
+was *tested*, not that nothing was there. Each was reproduced by hand instead. All stood.
+
+| Was claimed | What was actually true | Fix |
+|---|---|---|
+| Stock is only ever mutated by `place_order()` or `adjust_stock()`; authorization lives in RLS | **Every view in `public` accepted writes from `anon`.** A chef PATCHed `ingredients_public` and moved stock 4.565 → 999 **with no ledger row**, while the same PATCH on the base table correctly returned 403. An anonymous caller inserted, updated and deleted reservations through `reservation_load` | patch 006 |
+| — | `adjust_stock()`, `record_count()`, `void_order_item()` and `place_order()` had no tenant check. Another restaurant's manager moved Brigade's stock and signed the ledger entry; another restaurant's chef voided Brigade's dockets; an order at one tenant depleted another's pantry | patch 006 |
+| "A chef de partie works THEIR station" | A chef PATCHed their own `profiles.station` to `saute` (204) and fired a sauté ticket. `role: 'owner'` was correctly refused — station simply wasn't in the policy | patch 006 |
+| Recipe quantities are not readable outside the kitchen | `recipe_items_read` was `is_staff()` with no tenant filter: every restaurant's staff could read every other's BOM | patch 006 |
+| Analytics is the intelligence layer | **Food cost printed 5.9%**, directly above the line naming the 28–32% band it compares to. PostgREST caps responses at 1000 rows and a client `.limit(20000)` cannot raise it — 1000 of 3411 order items, HTTP 200, no error. The twenty dish counts summing to exactly 1000 was the tell. Now 22.4%, which matches an independent recomputation | paging in `reports.ts` |
+| — | Voiding an order's **last** item left the bill at full price, because the recompute joined a `GROUP BY` subquery that returns no rows when nothing survives. `pay_order()` would settle it | patch 006 |
+| — | The pantry's "used/day" applied one daypart's rate across a hardcoded 11-hour day: scallops overstated 18%, red wine understated 10% — under a printed formula that made it look exact | summed per service window |
+| — | **Nothing in the app linked to `/cart`.** "Add to order" put a dish somewhere the diner could only reach by typing the URL. Neither shell showed who you were signed in as, and ops had no sign-out at all | cart link + `AccountBar` |
+
+Two of those are worth stating plainly because they indict the process, not the code:
+
+**`sql-lint` had already flagged those views**, and all five warnings were waved through as
+intentional — the reasoning only ever considered whether a guest could *read* them. Views
+in Postgres are auto-updatable, and Supabase grants write access on new ones by default,
+so each was a way around every policy on its base table. The lint was right; the review
+of it was half a review. Its message now describes both directions and names the fix.
+
+**`verify:features` passed `/cart`** by requesting the path. Testing a URL is not testing a
+journey, and the same blind spot had passed an empty host's book. It now checks that a
+person could get there by tapping.
+
+Two findings were accepted rather than fixed, and are named here instead:
+
+- **"Seats turned" is seats at the tables used, not guests.** A four-top with two diners
+  counts four. The honest fix is a `covers` column written when a party is seated — patch
+  004's trigger is the hook — and deriving a guest count from furniture would be a worse
+  number wearing a better name. The tiles were renamed to what they measure instead.
+- **Revenue is now net of tax and tips** (`subtotal_cents`). `total_cents` was gross of 8%
+  tax, and its two writers disagree about tips — `pay_order()` includes them, the seed does
+  not — so the tile changed definition the moment anyone paid during a demo.
+
 ### Open, and deliberately so
 
 | Defect | Why it is acceptable for this submission |

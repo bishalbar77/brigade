@@ -1,0 +1,1240 @@
+<title>Brigade — wireframes</title>
+<style>
+  * { box-sizing: border-box; }
+  :root {
+    --g0:#fff; --g1:#f4f4f4; --g2:#e4e4e4; --g3:#c8c8c8; --g4:#9a9a9a; --g5:#5c5c5c; --g6:#2a2a2a;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  body {
+    margin:0; background:var(--g1); color:var(--g6);
+    font: 14px/1.5 var(--mono);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------- chrome ---------- */
+  header.top {
+    position:sticky; top:0; z-index:50; background:var(--g0);
+    border-bottom:2px solid var(--g6); padding:12px 20px;
+  }
+  header.top h1 { margin:0 0 2px; font-size:15px; letter-spacing:.08em; text-transform:uppercase; }
+  header.top p { margin:0; color:var(--g4); font-size:12px; }
+  nav.jump { display:flex; flex-wrap:wrap; gap:4px; margin-top:10px; }
+  nav.jump a {
+    font-size:11px; padding:3px 7px; border:1px solid var(--g3);
+    color:var(--g5); text-decoration:none; background:var(--g1);
+  }
+  nav.jump a:hover, nav.jump a:focus { border-color:var(--g6); color:var(--g6); }
+  nav.jump .sep { width:100%; height:0; }
+
+  main { max-width:1180px; margin:0 auto; padding:28px 20px 120px; }
+
+  .intro { background:var(--g0); border:1px solid var(--g3); padding:18px 20px; margin-bottom:36px; }
+  .intro h2 { margin:0 0 10px; font-size:13px; text-transform:uppercase; letter-spacing:.08em; }
+  .intro p { margin:0 0 8px; max-width:78ch; }
+  .intro strong { background:var(--g2); padding:0 3px; }
+
+  /* ---------- screen scaffold ---------- */
+  section.screen { margin:0 0 52px; }
+  .shead { border-bottom:2px solid var(--g6); padding-bottom:6px; margin-bottom:14px;
+           display:flex; flex-wrap:wrap; gap:10px; align-items:baseline; }
+  .shead .num { font-size:12px; color:var(--g4); }
+  .shead h3 { margin:0; font-size:16px; letter-spacing:.02em; }
+  .shead .meta { font-size:11px; color:var(--g4); margin-left:auto; text-align:right; }
+  .shead .meta b { color:var(--g5); font-weight:400; }
+
+  .row { display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap; }
+  .notes { flex:1 1 240px; min-width:230px; }
+  .notes ul { margin:0; padding-left:16px; }
+  .notes li { margin-bottom:7px; font-size:12px; color:var(--g5); }
+  .notes li b { color:var(--g6); }
+  .notes h4 { margin:0 0 8px; font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--g4); }
+
+  /* device frames */
+  .phone { width:375px; flex:0 0 375px; background:var(--g0); border:2px solid var(--g6); }
+  .wide  { flex:1 1 620px; min-width:520px; background:var(--g0); border:2px solid var(--g6); }
+  .frame-label { font-size:10px; color:var(--g4); text-transform:uppercase; letter-spacing:.1em;
+                 padding:3px 6px; border-bottom:1px solid var(--g2); background:var(--g1); }
+
+  /* ---------- greybox primitives ---------- */
+  .box { border:1px dashed var(--g4); padding:8px; position:relative; }
+  .box + .box { margin-top:8px; }
+  .box > .lbl {
+    position:absolute; top:-1px; right:-1px; font-size:9px; letter-spacing:.06em;
+    background:var(--g4); color:var(--g0); padding:1px 4px; text-transform:uppercase;
+  }
+  .pad { padding:12px; }
+  .bar { height:9px; background:var(--g3); margin:5px 0; }
+  .bar.dk { background:var(--g4); }
+  .bar.lt { background:var(--g2); }
+  .bar.tall { height:16px; }
+  .bar.xl { height:26px; background:var(--g5); }
+  .blk { background:var(--g2); display:flex; align-items:center; justify-content:center;
+         color:var(--g4); font-size:10px; letter-spacing:.1em; text-transform:uppercase; }
+  .btn { border:1.5px solid var(--g6); padding:8px; text-align:center; font-size:11px;
+         letter-spacing:.05em; text-transform:uppercase; }
+  .btn.ghost { border-color:var(--g4); color:var(--g4); }
+  .btn.dis { border-color:var(--g3); color:var(--g3); background:var(--g1); }
+  .chip { display:inline-block; border:1px solid var(--g4); font-size:10px; padding:1px 6px; margin:2px 2px 2px 0; }
+  .chip.solid { background:var(--g5); color:var(--g0); border-color:var(--g5); }
+  .chip.out { border-style:dashed; color:var(--g4); }
+  .t { font-size:11px; color:var(--g5); }
+  .t.mut { color:var(--g4); }
+  .t.big { font-size:15px; color:var(--g6); }
+  .grid { display:grid; gap:8px; }
+  .g2 { grid-template-columns:1fr 1fr; }
+  .g3 { grid-template-columns:repeat(3,1fr); }
+  .g4c { grid-template-columns:repeat(4,1fr); }
+  .g5c { grid-template-columns:repeat(5,1fr); }
+  .flexr { display:flex; gap:8px; align-items:center; }
+  .between { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .strike { text-decoration:line-through; color:var(--g3); }
+
+  /* signature element placeholder */
+  .sig { border:2px solid var(--g6); background:repeating-linear-gradient(
+           45deg, var(--g2) 0 6px, var(--g1) 6px 12px);
+         padding:10px; text-align:center; font-size:10px; letter-spacing:.08em;
+         text-transform:uppercase; color:var(--g5); }
+
+  .callout { border-left:3px solid var(--g6); background:var(--g0); padding:8px 12px;
+             margin:10px 0; font-size:12px; color:var(--g5); }
+  .callout b { color:var(--g6); }
+
+  table.wf { width:100%; border-collapse:collapse; font-size:11px; }
+  table.wf th { text-align:left; font-weight:400; color:var(--g4); font-size:10px;
+                text-transform:uppercase; letter-spacing:.06em; border-bottom:1px solid var(--g3);
+                padding:5px 6px; }
+  table.wf td { border-bottom:1px solid var(--g2); padding:6px; color:var(--g5); }
+
+  @media (max-width:860px) {
+    .phone { flex:0 0 100%; width:100%; }
+    .wide  { min-width:0; flex:1 1 100%; }
+  }
+</style>
+
+<header class="top">
+  <h1>Brigade — greybox wireframes</h1>
+  <p>Structure only. No palette, no type, no visual direction — that is <code>frontend-design</code>'s job.</p>
+  <nav class="jump">
+    <a href="#s1">01 landing</a><a href="#s2">02 auth</a><a href="#s3">03 menu</a>
+    <a href="#s4">04 dish</a><a href="#s5">05 cart</a><a href="#s6">06 tracking</a>
+    <a href="#s7">07 reserve/queue</a><a href="#s8">08 bill</a>
+    <span class="sep"></span>
+    <a href="#s9">09 KDS</a><a href="#s10">10 runway board</a><a href="#s11">11 floor</a>
+    <a href="#s12">12 inventory</a><a href="#s13">13 BOM editor</a>
+    <a href="#s14">14 reservations</a><a href="#s15">15 analytics</a>
+  </nav>
+</header>
+
+<main>
+
+<div class="intro">
+  <h2>How to read these</h2>
+  <p>Grey blocks are content. <strong>Dashed regions</strong> are containers, labelled at the corner.
+     Hatched blocks marked <strong>SIGNATURE</strong> are where the runway countdown goes — deliberately
+     undesigned, because that form is the one thing <code>frontend-design</code> should invent.</p>
+  <p>These are <strong>deliberately ugly</strong>. System monospace, greyscale, no spacing polish. That is
+     the point: a wireframe that looks designed anchors the designer to whatever it accidentally
+     suggested. The aesthetics rules in <code>CLAUDE.md</code> apply to the product, not to this file.</p>
+  <p>Guest screens are framed at <strong>375px</strong> (smallest real phone). Ops screens are wide —
+     the KDS is a wall-mounted screen read from ~2m, which is why its type is oversized here.</p>
+  <p>Right-hand notes carry <strong>intent and edge cases</strong>, not styling. Where a note says "see
+     docs/features/x.md" the full rules live there.</p>
+</div>
+
+<!-- ============ 01 LANDING ============ -->
+<section class="screen" id="s1">
+  <div class="shead">
+    <span class="num">01</span><h3>Landing</h3>
+    <span class="meta"><b>/</b> · public · phone-first</span>
+  </div>
+  <div class="row">
+    <div class="phone">
+      <div class="frame-label">375px · guest</div>
+      <div class="pad">
+        <div class="box"><span class="lbl">nav</span>
+          <div class="between"><div class="bar dk" style="width:70px;margin:0"></div>
+            <div class="flexr"><span class="chip">menu</span><span class="chip solid">sign in</span></div></div>
+        </div>
+        <div class="box"><span class="lbl">hero — the thesis</span>
+          <div class="bar xl" style="width:92%"></div>
+          <div class="bar xl" style="width:64%"></div>
+          <div class="bar lt" style="width:88%"></div>
+          <div class="bar lt" style="width:72%"></div>
+          <div class="sig" style="margin-top:12px">signature — live runway proof<br>"6 left · 86s ~20:40"</div>
+          <div class="t mut" style="margin-top:6px">↑ real data from the live menu, not an illustration</div>
+          <div class="grid g2" style="margin-top:12px">
+            <div class="btn">view menu</div><div class="btn ghost">book a table</div>
+          </div>
+        </div>
+        <div class="box"><span class="lbl">what's on right now</span>
+          <div class="t mut">live strip — 3 dishes + real portion counts</div>
+          <div class="grid g3" style="margin-top:8px">
+            <div><div class="blk" style="height:44px">img</div><div class="bar" style="width:80%"></div><span class="chip">6 left</span></div>
+            <div><div class="blk" style="height:44px">img</div><div class="bar" style="width:70%"></div><span class="chip">12 left</span></div>
+            <div><div class="blk" style="height:44px">img</div><div class="bar" style="width:85%"></div><span class="chip out">86</span></div>
+          </div>
+        </div>
+        <div class="box"><span class="lbl">how it works · 3 beats</span>
+          <div class="grid g3"><div class="bar tall"></div><div class="bar tall"></div><div class="bar tall"></div></div>
+          <div class="t mut" style="margin-top:6px">not numbered 01/02/03 unless it's genuinely a sequence</div>
+        </div>
+        <div class="box"><span class="lbl">footer</span><div class="bar lt" style="width:50%"></div></div>
+      </div>
+    </div>
+    <div class="notes">
+      <h4>Intent</h4>
+      <ul>
+        <li><b>The hero must prove the product, not describe it.</b> A live availability figure pulled from
+          real data beats any headline claim. If the hero is just big type + a gradient, we've built the
+          template answer.</li>
+        <li><b>This page exists for judges as much as diners.</b> First impression for US1 (Bronze). It has
+          to communicate the thesis in about five seconds.</li>
+        <li>The live strip doubles as the demo opener — point at a real number and say "that came from the
+          pantry."</li>
+        <li>Show a genuinely <b>86'd</b> dish in the strip. Honesty about scarcity <i>is</i> the pitch.</li>
+      </ul>
+      <h4>Edge cases</h4>
+      <ul>
+        <li>Outside service hours → strip shows portions but <b>no countdown</b>. A landing page predicting
+          an 86 at 04:00 destroys trust in the number.</li>
+        <li>Fewer than 3 dishes with data → collapse the strip rather than pad it with placeholders.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 02 AUTH ============ -->
+<section class="screen" id="s2">
+  <div class="shead">
+    <span class="num">02</span><h3>Auth — sign up, OTP, OAuth</h3>
+    <span class="meta"><b>/auth/sign-up</b> · <b>/auth/verify</b> · US2</span>
+  </div>
+  <div class="row">
+    <div class="phone">
+      <div class="frame-label">375px · sign up</div>
+      <div class="pad">
+        <div class="box"><span class="lbl">form</span>
+          <div class="bar tall" style="width:55%"></div>
+          <div class="t mut">email</div><div class="box" style="padding:10px"></div>
+          <div class="t mut" style="margin-top:8px">password</div><div class="box" style="padding:10px"></div>
+          <div class="t mut" style="margin-top:4px">real &lt;label&gt;, never placeholder-only</div>
+          <div class="btn" style="margin-top:12px">create account</div>
+        </div>
+        <div class="box"><span class="lbl">or</span>
+          <div class="btn ghost">continue with Google</div>
+          <div class="t mut" style="margin-top:6px">no OTP — Google already verified the address</div>
+        </div>
+        <div class="t mut" style="margin-top:8px">staff never self-signup → invite only</div>
+      </div>
+    </div>
+    <div class="phone">
+      <div class="frame-label">375px · OTP verify</div>
+      <div class="pad">
+        <div class="box"><span class="lbl">otp entry</span>
+          <div class="bar tall" style="width:70%"></div>
+          <div class="bar lt" style="width:90%"></div>
+          <div class="grid g5c" style="margin-top:12px">
+            <div class="box" style="padding:14px 0"></div><div class="box" style="padding:14px 0"></div>
+            <div class="box" style="padding:14px 0"></div><div class="box" style="padding:14px 0"></div>
+            <div class="box" style="padding:14px 0"></div>
+          </div>
+          <div class="btn" style="margin-top:12px">verify</div>
+          <div class="between" style="margin-top:10px">
+            <span class="t mut">expires in 9:41</span><span class="chip">resend</span>
+          </div>
+        </div>
+        <div class="box"><span class="lbl">error state — designed</span>
+          <div class="bar dk" style="width:80%"></div>
+          <div class="t">"That code expired. Send a new one."</div>
+          <div class="t mut">says what happened + how to fix. No apology, never vague.</div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <h4>Intent</h4>
+      <ul>
+        <li><b>Role is never client input.</b> Guests default to <code>guest</code>; staff roles come only
+          from an owner's invite. A signup that could pick its own role is privilege escalation.</li>
+        <li>Post-login routing is by role — 7 destinations. See <code>docs/features/auth.md</code>.</li>
+      </ul>
+      <h4>Known risk</h4>
+      <ul>
+        <li><b>Supabase built-in SMTP is rate-capped.</b> It will stop sending mid-demo and look like broken
+          auth. Test the cap on day 1; either wire custom SMTP or make Google the primary demo path.
+          This is risk #1 in <code>docs/06-roadmap.md</code>.</li>
+        <li>The resend affordance must actually work — an expired code with no way forward is a dead end.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 03 MENU ============ -->
+<section class="screen" id="s3">
+  <div class="shead">
+    <span class="num">03</span><h3>Live menu — the differentiator, guest-facing</h3>
+    <span class="meta"><b>/menu</b> · US3 · phone</span>
+  </div>
+  <div class="row">
+    <div class="phone">
+      <div class="frame-label">375px · guest · realtime</div>
+      <div class="pad">
+        <div class="box"><span class="lbl">header</span>
+          <div class="between"><div class="bar dk" style="width:60px;margin:0"></div>
+            <div class="flexr"><span class="chip">filters</span><span class="chip solid">cart 2</span></div></div>
+        </div>
+        <div class="box"><span class="lbl">filters</span>
+          <span class="chip">all</span><span class="chip solid">veg</span><span class="chip">no nuts</span>
+          <span class="chip">no dairy</span>
+          <div class="t mut" style="margin-top:4px">allergens = hard exclusion, never a rank penalty</div>
+        </div>
+
+        <div class="box"><span class="lbl">category · starters</span>
+          <div class="bar dk" style="width:40%"></div>
+
+          <div class="box" style="margin-top:8px"><span class="lbl">dish · plenty</span>
+            <div class="flexr">
+              <div class="blk" style="width:64px;height:52px;flex:0 0 64px">img</div>
+              <div style="flex:1">
+                <div class="bar dk" style="width:75%"></div>
+                <div class="bar lt" style="width:95%"></div>
+                <div class="between"><span class="t big">£8</span><span class="t mut">no badge</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="box"><span class="lbl">dish · low</span>
+            <div class="flexr">
+              <div class="blk" style="width:64px;height:52px;flex:0 0 64px">img</div>
+              <div style="flex:1">
+                <div class="bar dk" style="width:68%"></div>
+                <div class="bar lt" style="width:88%"></div>
+                <div class="between"><span class="t big">£11</span><span class="chip">12 left</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="box"><span class="lbl">dish · critical</span>
+            <div class="flexr">
+              <div class="blk" style="width:64px;height:52px;flex:0 0 64px">img</div>
+              <div style="flex:1">
+                <div class="bar dk" style="width:72%"></div>
+                <div class="bar lt" style="width:80%"></div>
+                <div class="between"><span class="t big">£19</span>
+                  <span class="chip solid">4 left · ~40 min</span></div>
+              </div>
+            </div>
+            <div class="t mut">demoted by steer_score — still fully orderable</div>
+          </div>
+
+          <div class="box"><span class="lbl">dish · 86</span>
+            <div class="flexr" style="opacity:.55">
+              <div class="blk" style="width:64px;height:52px;flex:0 0 64px">img</div>
+              <div style="flex:1">
+                <div class="bar" style="width:70%"></div>
+                <div class="between"><span class="t strike">£14</span>
+                  <span class="chip out">86</span></div>
+              </div>
+            </div>
+            <div class="t mut">struck through + labelled "86" — never colour alone</div>
+          </div>
+        </div>
+        <div class="t mut">↕ counts change live as other tables order — no reload</div>
+      </div>
+    </div>
+    <div class="notes">
+      <h4>Why this screen matters most</h4>
+      <ul>
+        <li>This is where Brigade stops being a Toast clone. <b>Toast computes this number and shows it only
+          to staff.</b> Putting it in front of the person choosing is the whole idea.</li>
+        <li>Four visual states map to the runway bands: plenty (no badge) → low → critical → 86.</li>
+      </ul>
+      <h4>Rules</h4>
+      <ul>
+        <li><b>Ranking, not hiding.</b> Near-86 dishes sink and gain a badge but stay orderable. Hiding an
+          available dish is a lie, and a guest who came for the branzino must still find it.</li>
+        <li><b>Steering sorts within a category only.</b> Reordering across starters and mains makes a menu
+          unusable.</li>
+        <li><b>No dish with an empty BOM shows as unavailable</b> — no recipe means unlimited. A
+          half-configured menu must not read as a closed kitchen.</li>
+        <li><b>Never leak cost or margin.</b> Margin drives the sort; the guest sees only the order.</li>
+        <li>Guests are not told <i>why</i> something is 86'd. Ingredient stock is staff information.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 04 DISH ============ -->
+<section class="screen" id="s4">
+  <div class="shead">
+    <span class="num">04</span><h3>Dish detail</h3>
+    <span class="meta"><b>/menu/[dishId]</b> · US3 + US5 pairings</span>
+  </div>
+  <div class="row">
+    <div class="phone">
+      <div class="frame-label">375px · guest</div>
+      <div class="pad">
+        <div class="blk" style="height:150px">hero image</div>
+        <div class="box"><span class="lbl">identity</span>
+          <div class="bar xl" style="width:80%"></div>
+          <div class="between"><span class="t big">£19</span><span class="chip solid">4 left</span></div>
+          <div class="bar lt" style="width:96%"></div>
+          <div class="bar lt" style="width:84%"></div>
+        </div>
+        <div class="box"><span class="lbl">runway detail</span>
+          <div class="sig">signature — countdown<br>"about 40 min at tonight's rate"</div>
+          <div class="t mut" style="margin-top:6px">approximation in the copy — never false precision</div>
+        </div>
+        <div class="box"><span class="lbl">transparency</span>
+          <div class="t">allergens</div>
+          <span class="chip">fish</span><span class="chip">gluten</span>
+          <div class="t" style="margin-top:6px">what's in it</div>
+          <div class="bar lt" style="width:90%"></div>
+          <div class="t mut">ingredient names only — no quantities, no costs</div>
+        </div>
+        <div class="box"><span class="lbl">qty + add</span>
+          <div class="between"><div class="flexr"><span class="chip">−</span><span class="t big">1</span><span class="chip">+</span></div>
+            <div class="btn" style="flex:1;margin-left:8px">add to order</div></div>
+          <div class="t mut">+ capped at portions available</div>
+        </div>
+        <div class="box"><span class="lbl">pairings · item-item CF</span>
+          <div class="grid g3">
+            <div><div class="blk" style="height:40px">img</div><div class="bar" style="width:80%"></div></div>
+            <div><div class="blk" style="height:40px">img</div><div class="bar" style="width:70%"></div></div>
+            <div><div class="blk" style="height:40px">img</div><div class="bar" style="width:75%"></div></div>
+          </div>
+          <div class="t mut" style="margin-top:4px">availability + allergen filtered before ranking</div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <h4>Intent</h4>
+      <ul>
+        <li>Show ingredient <b>names</b> as transparency, without exposing recipe quantities — quantities are
+          the recipe, and the recipe is the restaurant's IP.</li>
+        <li>The quantity stepper is capped at real availability, so an impossible order can't even be
+          composed.</li>
+      </ul>
+      <h4>Rules</h4>
+      <ul>
+        <li><b>Never recommend an 86'd dish.</b> A recommender that suggests the unavailable is worse than no
+          recommender — this filter is what differentiates it from generic "customers also bought."</li>
+        <li><b>Allergen match = hard exclusion.</b> Ranking down an allergen is a safety bug.</li>
+        <li>If availability drops to 0 while the guest is on this page, the add button disables <b>with an
+          explanation</b> — never a silent failure on tap.</li>
+        <li>Cold start (no history) → pairings fall back to margin × popularity, never empty.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 05 CART ============ -->
+<section class="screen" id="s5">
+  <div class="shead">
+    <span class="num">05</span><h3>Cart — and the insufficient-stock path</h3>
+    <span class="meta"><b>/cart</b> · US3</span>
+  </div>
+  <div class="row">
+    <div class="phone">
+      <div class="frame-label">375px · cart</div>
+      <div class="pad">
+        <div class="box"><span class="lbl">table context</span>
+          <div class="between"><span class="t">Table 7</span><span class="chip">change</span></div>
+        </div>
+        <div class="box"><span class="lbl">line items</span>
+          <div class="between" style="margin-bottom:8px">
+            <div style="flex:1"><div class="bar dk" style="width:70%"></div><div class="t mut">×2 · no chilli</div></div>
+            <span class="t big">£22</span></div>
+          <div class="between">
+            <div style="flex:1"><div class="bar dk" style="width:60%"></div><div class="t mut">×1</div></div>
+            <span class="t big">£8</span></div>
+        </div>
+        <div class="box"><span class="lbl">⚠ pre-submit warning</span>
+          <div class="bar dk" style="width:85%"></div>
+          <div class="t">"Only 1 branzino left — you have 2."</div>
+          <div class="flexr" style="margin-top:8px"><span class="chip solid">reduce to 1</span><span class="chip">remove</span></div>
+          <div class="t mut" style="margin-top:4px">caught <b>before</b> submit — stock moved while cart sat</div>
+        </div>
+        <div class="box"><span class="lbl">totals</span>
+          <div class="between"><span class="t mut">subtotal</span><span class="t">£30</span></div>
+          <div class="between"><span class="t mut">tax</span><span class="t">£2.40</span></div>
+          <div class="between"><span class="t big">total</span><span class="t big">£32.40</span></div>
+        </div>
+        <div class="btn">place order</div>
+        <div class="t mut" style="margin-top:6px">idempotency key — double-tap ≠ two orders</div>
+      </div>
+    </div>
+    <div class="phone">
+      <div class="frame-label">375px · 409 INSUFFICIENT_STOCK</div>
+      <div class="pad">
+        <div class="box"><span class="lbl">the race, lost</span>
+          <div class="bar xl" style="width:70%"></div>
+          <div class="t">"The last branzino just went."</div>
+          <div class="t mut">Someone at another table ordered it a moment ago.</div>
+          <div class="box" style="margin-top:10px"><span class="lbl">recovery</span>
+            <div class="t">Nothing was charged and your order wasn't placed.</div>
+            <div class="grid g2" style="margin-top:8px">
+              <div class="btn">order without it</div><div class="btn ghost">see similar</div>
+            </div>
+          </div>
+        </div>
+        <div class="callout"><b>Whole transaction rolled back.</b> No partial order exists. A guest who
+          ordered 3 and silently got 1 is worse off than one who was told.</div>
+      </div>
+    </div>
+    <div class="notes">
+      <h4>The hard part</h4>
+      <ul>
+        <li>Two guests both see "1 left" and tap simultaneously. A read-then-write in app code lets both
+          through and drives stock negative.</li>
+        <li><code>place_order()</code> locks the ingredient rows <code>FOR UPDATE ORDER BY id</code>,
+          re-checks inside the transaction, and raises a typed error. <b>The ordering isn't cosmetic</b> —
+          two orders with overlapping ingredients deadlock if they lock in different sequences.</li>
+        <li>This screen is where that engineering becomes visible to a judge. It's step 6 of the demo
+          script in <code>docs/07-submission.md</code>.</li>
+      </ul>
+      <h4>Rules</h4>
+      <ul>
+        <li>Cart survives refresh (localStorage), and re-validates on load.</li>
+        <li>Error names the <b>dish</b> and the <b>real remaining count</b> — a generic "something went
+          wrong" wastes the one moment the guest is paying attention.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 06 TRACKING ============ -->
+<section class="screen" id="s6">
+  <div class="shead">
+    <span class="num">06</span><h3>Order tracking</h3>
+    <span class="meta"><b>/order/[id]</b> · US3 · realtime</span>
+  </div>
+  <div class="row">
+    <div class="phone">
+      <div class="frame-label">375px · live</div>
+      <div class="pad">
+        <div class="box"><span class="lbl">order header</span>
+          <div class="between"><span class="t big">Table 7</span><span class="t mut">placed 19:42</span></div>
+        </div>
+        <div class="box"><span class="lbl">item 1 · per-item rail</span>
+          <div class="bar dk" style="width:60%"></div>
+          <div class="grid g5c" style="margin-top:8px">
+            <div><div class="bar dk"></div><div class="t mut" style="font-size:9px">placed</div></div>
+            <div><div class="bar dk"></div><div class="t mut" style="font-size:9px">fired</div></div>
+            <div><div class="bar dk"></div><div class="t mut" style="font-size:9px">cooking</div></div>
+            <div><div class="bar lt"></div><div class="t mut" style="font-size:9px">plated</div></div>
+            <div><div class="bar lt"></div><div class="t mut" style="font-size:9px">served</div></div>
+          </div>
+          <div class="t mut" style="margin-top:6px">≈ 8–12 min · range, never a countdown</div>
+        </div>
+        <div class="box"><span class="lbl">item 2 · independent</span>
+          <div class="bar dk" style="width:52%"></div>
+          <div class="grid g5c" style="margin-top:8px">
+            <div><div class="bar dk"></div></div><div><div class="bar dk"></div></div>
+            <div><div class="bar dk"></div></div><div><div class="bar dk"></div></div>
+            <div><div class="bar dk"></div></div>
+          </div>
+          <div class="t">served 19:51 ✓</div>
+          <div class="t mut">starter out while main still on grill — why status is per-item</div>
+        </div>
+        <div class="box"><span class="lbl">item 3 · voided</span>
+          <div class="bar" style="width:48%"></div>
+          <div class="t">Cancelled by kitchen — sauce broke.</div>
+          <div class="t mut">shown with a reason, never silently removed</div>
+        </div>
+        <div class="box"><span class="lbl">when all served</span>
+          <div class="btn">view bill</div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <h4>Intent</h4>
+      <ul>
+        <li>A guest who can see progress stops asking the server, which removes a trip for the server too.
+          One feature, both sides of the PS "delayed communication" bullet.</li>
+        <li><b>Per-item, not per-order.</b> An order-level status cannot express "starter away, main still
+          cooking" — which is the entire job of the pass.</li>
+      </ul>
+      <h4>Rules</h4>
+      <ul>
+        <li>Estimates are <b>ranges</b>. A wrong precise number costs more trust than an honest range. If
+          kitchen load can't be computed, suppress rather than show 0.</li>
+        <li>RLS restricts to the order's owner — changing the URL to another order returns nothing, enforced
+          in the database.</li>
+        <li><b>Must self-heal:</b> refetch on reconnect and on tab focus. Guests go through tunnels and
+          lifts; a screen stuck on stale state looks broken.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 07 RESERVE / QUEUE ============ -->
+<section class="screen" id="s7">
+  <div class="shead">
+    <span class="num">07</span><h3>Reserve &amp; walk-in queue</h3>
+    <span class="meta"><b>/reserve</b> · <b>/queue/[id]</b> · US3</span>
+  </div>
+  <div class="row">
+    <div class="phone">
+      <div class="frame-label">375px · book</div>
+      <div class="pad">
+        <div class="box"><span class="lbl">party size</span>
+          <div class="flexr"><span class="chip">1</span><span class="chip solid">2</span><span class="chip">3</span>
+            <span class="chip">4</span><span class="chip">5</span><span class="chip">6+</span></div>
+        </div>
+        <div class="box"><span class="lbl">date</span>
+          <div class="grid g4c"><div class="btn ghost">Fri</div><div class="btn">Sat</div>
+            <div class="btn ghost">Sun</div><div class="btn ghost">Mon</div></div>
+        </div>
+        <div class="box"><span class="lbl">time — real capacity</span>
+          <div class="grid g3">
+            <div class="btn ghost">18:00</div><div class="btn dis">18:30</div><div class="btn">19:00</div>
+            <div class="btn ghost">19:30</div><div class="btn dis">20:00</div><div class="btn ghost">20:30</div>
+          </div>
+          <div class="t mut" style="margin-top:6px">greyed = genuinely full, checked server-side</div>
+        </div>
+        <div class="btn">confirm booking</div>
+        <div class="box" style="margin-top:12px"><span class="lbl">or walk in</span>
+          <div class="between"><span class="t">Wait now: <b>20–30 min</b></span><span class="chip solid">join queue</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="phone">
+      <div class="frame-label">375px · live queue position</div>
+      <div class="pad">
+        <div class="box"><span class="lbl">position</span>
+          <div class="sig">signature-adjacent<br>position 3 · 20–30 min</div>
+          <div class="t mut" style="margin-top:6px">range, from real turn times — not a guess</div>
+        </div>
+        <div class="box"><span class="lbl">how it's computed — inspectable</span>
+          <div class="t">2 parties ahead needing a 2-top</div>
+          <div class="t">median 2-top turn here: 68 min</div>
+          <div class="t mut">shown so the number isn't magic</div>
+        </div>
+        <div class="box"><span class="lbl">reassurance</span>
+          <div class="t">We'll notify you when your table is nearly ready — you can wait elsewhere.</div>
+        </div>
+        <div class="btn ghost">leave queue</div>
+        <div class="t mut" style="margin-top:4px">one tap, no explanation demanded</div>
+      </div>
+    </div>
+    <div class="notes">
+      <h4>Intent</h4>
+      <ul>
+        <li>The "smart" in smart reservations is that the quote comes from <b>this restaurant's actual
+          seated→closed durations</b>, bucketed by party size, not from a host's guess.</li>
+        <li>Letting the guest leave and be called back is the real fix for "long waiting times for tables."</li>
+      </ul>
+      <h4>Rules</h4>
+      <ul>
+        <li><b>Overbooking refused at the API.</b> The picker is convenience; capacity is enforced server-side.</li>
+        <li>Cold start (&lt;10 historical turns for a bucket) → configured default, and <b>don't present it as
+          data-driven</b>.</li>
+        <li>Party size <b>bucketed</b> (1–2, 3–4, 5–6, 7+). A 2-top and 4-top turn differently; 3 vs 4 is noise.</li>
+        <li>No-show grace window before releasing a held table — instant release punishes traffic, never
+          releasing blocks the table all night.</li>
+        <li>One active queue entry per guest, to stop queue-stuffing.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 08 BILL ============ -->
+<section class="screen" id="s8">
+  <div class="shead">
+    <span class="num">08</span><h3>Bill</h3>
+    <span class="meta"><b>/bill/[orderId]</b> · US3</span>
+  </div>
+  <div class="row">
+    <div class="phone">
+      <div class="frame-label">375px · guest</div>
+      <div class="pad">
+        <div class="box"><span class="lbl">served items only</span>
+          <div class="between"><div style="flex:1"><div class="bar dk" style="width:65%"></div><div class="t mut">×2 @ £11</div></div><span class="t">£22</span></div>
+          <div class="between"><div style="flex:1"><div class="bar dk" style="width:55%"></div><div class="t mut">×1 @ £8</div></div><span class="t">£8</span></div>
+          <div class="between" style="opacity:.5"><div style="flex:1"><div class="bar" style="width:50%"></div><div class="t mut">cancelled — not charged</div></div><span class="t strike">£14</span></div>
+          <div class="t mut" style="margin-top:6px">prices captured at order time, never re-joined live</div>
+        </div>
+        <div class="box"><span class="lbl">totals</span>
+          <div class="between"><span class="t mut">subtotal</span><span class="t">£30.00</span></div>
+          <div class="between"><span class="t mut">tax</span><span class="t">£2.40</span></div>
+          <div class="between"><span class="t mut">tip</span><span class="t">£3.00</span></div>
+          <div class="between"><span class="t big">total</span><span class="t big">£35.40</span></div>
+          <div class="t mut">integer cents throughout · rounded once, on the total</div>
+        </div>
+        <div class="box"><span class="lbl">tip</span>
+          <div class="grid g4c"><div class="btn ghost">none</div><div class="btn">10%</div>
+            <div class="btn ghost">15%</div><div class="btn ghost">other</div></div>
+        </div>
+        <div class="btn">pay £35.40</div>
+        <div class="t mut" style="margin-top:6px">simulated provider — records a payment, marks paid</div>
+        <div class="box" style="margin-top:10px"><span class="lbl">after</span>
+          <div class="t">Paid ✓ · table released for bussing</div>
+          <div class="chip">receipt</div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <h4>Rules</h4>
+      <ul>
+        <li><b>Totals computed server-side.</b> A client-submitted total is a client-controlled price.</li>
+        <li><b>Unserved, non-voided items block closing.</b> Charging for food that never arrived is the worst
+          possible bug here.</li>
+        <li><b>Idempotent payment</b> — unique constraint + idempotency key, not a disabled button.</li>
+        <li>Rounding happens <b>once on the final total</b>, never per line item — per-line rounding produces
+          totals that don't add up.</li>
+        <li>Closing moves the table to <code>dirty</code>, never straight to <code>open</code>. Someone has to
+          actually clear it.</li>
+      </ul>
+      <h4>Cut-line</h4>
+      <ul>
+        <li>Split billing is <b>cut-line item 2</b> — deliberately absent from this wireframe. It's fiddly and
+          demos poorly next to the runway board.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 09 KDS ============ -->
+<section class="screen" id="s9">
+  <div class="shead">
+    <span class="num">09</span><h3>KDS — docket wall <span style="font-size:11px;color:var(--g4)">NEVER CUT</span></h3>
+    <span class="meta"><b>/ops/kds</b> · US4 · wall screen, read at ~2m, no mouse</span>
+  </div>
+  <div class="row">
+    <div class="wide">
+      <div class="frame-label">wall-mounted · oversized type · tap only</div>
+      <div class="pad">
+        <div class="box"><span class="lbl">service bar</span>
+          <div class="between">
+            <div class="flexr"><span class="t big">DINNER</span><span class="t mut">19:52</span></div>
+            <div class="flexr"><span class="chip solid">grill</span><span class="chip">sauté</span>
+              <span class="chip">larder</span><span class="chip">pastry</span></div>
+            <span class="t">12 open · 3 late</span>
+          </div>
+        </div>
+
+        <div class="grid g3" style="margin-top:10px">
+          <div class="box"><span class="lbl">docket · fresh</span>
+            <div class="between"><span class="t big">T7</span><span class="chip">0:40</span></div>
+            <div class="bar xl" style="width:90%"></div>
+            <div class="t mut">×2 · no chilli</div>
+            <div class="bar xl" style="width:70%;margin-top:8px"></div>
+            <div class="grid g2" style="margin-top:10px"><div class="btn">fire</div><div class="btn ghost">void</div></div>
+          </div>
+
+          <div class="box"><span class="lbl">docket · cooking</span>
+            <div class="between"><span class="t big">T3</span><span class="chip solid">11:20 ⚠</span></div>
+            <div class="bar xl" style="width:85%"></div>
+            <div class="t">cooking</div>
+            <div class="bar xl" style="width:60%;margin-top:8px"></div>
+            <div class="t">cooking</div>
+            <div class="btn" style="margin-top:10px">plate</div>
+            <div class="t mut">age ≥10 min: colour + glyph + label, never colour alone</div>
+          </div>
+
+          <div class="box" style="border-width:3px"><span class="lbl">docket · LATE</span>
+            <div class="between"><span class="t big">T11</span><span class="chip solid">23:05 ⚠⚠</span></div>
+            <div class="bar xl" style="width:88%"></div>
+            <div class="t mut">multi-station — sauté still out</div>
+            <div class="btn dis" style="margin-top:10px">waiting on sauté</div>
+            <div class="t mut">expo sees all-plated before the table goes out together</div>
+          </div>
+        </div>
+
+        <div class="box" style="margin-top:10px"><span class="lbl">86 board — condensed from runway</span>
+          <div class="flexr" style="flex-wrap:wrap">
+            <span class="chip out">branzino · 86</span>
+            <span class="chip solid">lamb · 4 left · 86s ~20:40</span>
+            <span class="chip">scallop · 9 left</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <h4>Environment is the brief</h4>
+      <ul>
+        <li>Rahul is standing, hot, hands busy, reading from <b>~2m</b> through glare on a grease-filmed
+          screen. <b>No mouse, no hover, no small text, no drag-and-drop.</b></li>
+        <li><b>Ticket age is the critical number.</b> A docket sitting 23 minutes must be unmissable without
+          anyone watching the screen.</li>
+        <li>A new docket arriving gets deliberate motion emphasis — the one place animation is
+          <i>functional</i> rather than decorative.</li>
+      </ul>
+      <h4>Rules</h4>
+      <ul>
+        <li><b>Transitions validated server-side.</b> <code>placed→served</code> skipping the middle is a 409.
+          A fat-finger must not mark food served that was never cooked.</li>
+        <li><b>Role + station gated:</b> a chef acts only on their own station; expo owns plated→served.</li>
+        <li><b>Must survive an 8-hour session</b> without reload — no subscription leak, no unbounded DOM.
+          Completed dockets leave the board.</li>
+        <li>Realtime drop → reconnect and refetch. A KDS showing stale tickets is actively dangerous.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 10 RUNWAY BOARD ============ -->
+<section class="screen" id="s10">
+  <div class="shead">
+    <span class="num">10</span><h3>Runway board <span style="font-size:11px;color:var(--g4)">THE DIFFERENTIATOR · NEVER CUT</span></h3>
+    <span class="meta"><b>/ops/runway</b> · US5 Platinum</span>
+  </div>
+  <div class="row">
+    <div class="wide">
+      <div class="frame-label">manager desktop / wall · sorted by urgency</div>
+      <div class="pad">
+        <div class="box"><span class="lbl">header</span>
+          <div class="between"><span class="t big">RUNWAY — dinner service</span>
+            <span class="t mut">live · 19:52</span></div>
+        </div>
+
+        <div class="box" style="border-width:3px"><span class="lbl">critical</span>
+          <div class="between">
+            <div style="flex:1">
+              <div class="bar xl" style="width:45%"></div>
+              <div class="t">grill · <b>4 portions</b> · selling 6/hr</div>
+              <div class="t">binding: <b>sea bass fillet</b> — 4 left</div>
+            </div>
+            <div style="flex:0 0 190px">
+              <div class="sig">signature — depleting countdown<br>86s ~20:40</div>
+            </div>
+            <div style="flex:0 0 90px"><div class="btn ghost">+ stock</div><div class="btn ghost" style="margin-top:6px">86 now</div></div>
+          </div>
+          <div class="t mut">binding ingredient is the actionable part — "because you have 4 lemons"</div>
+        </div>
+
+        <div class="box"><span class="lbl">low</span>
+          <div class="between">
+            <div style="flex:1"><div class="bar tall" style="width:40%"></div>
+              <div class="t">sauté · 11 portions · 3/hr</div>
+              <div class="t">binding: lamb rump</div></div>
+            <div style="flex:0 0 190px"><div class="bar dk" style="width:60%"></div><div class="t">86s ~23:15</div></div>
+            <div style="flex:0 0 90px"><div class="btn ghost">+ stock</div></div>
+          </div>
+        </div>
+
+        <div class="box"><span class="lbl">plenty · collapsed</span>
+          <div class="t mut">9 dishes with &gt;2h runway — collapsed by default</div>
+        </div>
+
+        <div class="box"><span class="lbl">not enough history — honest</span>
+          <div class="between"><div style="flex:1"><div class="bar tall" style="width:35%"></div>
+            <div class="t">14 portions · <b>no prediction</b></div></div>
+            <span class="t mut">&lt;3 velocity samples — marked, not fabricated</span></div>
+        </div>
+
+        <div class="box"><span class="lbl">unlimited · grouped separately</span>
+          <div class="t mut">3 dishes with no BOM entered — not shown with an infinite runway</div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <h4>This is the product's whole claim</h4>
+      <ul>
+        <li>Existing POS says a dish <i>is</i> out. This says <b>when it will be</b>, while there's still time
+          to prep more, adjust, or brief the floor.</li>
+        <li>Step 5 of the demo script: <i>"this is the part no POS does."</i></li>
+      </ul>
+      <h4>Rules that protect trust in the number</h4>
+      <ul>
+        <li><b>Outside service hours, suppress predictions.</b> Velocity is 0, so runway is undefined. A board
+          predicting an 86 at 04:00 destroys trust in everything else on screen.</li>
+        <li><b>Cold start is marked, not fabricated.</b> &lt;3 samples → show portions, say "not enough
+          history."</li>
+        <li><b>portions ≤ 3 forces critical</b> regardless of rate — at low counts the ratio is noisy and "3
+          left" matters on its own.</li>
+        <li><b>Always name the binding ingredient.</b> That's the difference between information and action.</li>
+        <li>Countdown animates <b>on change, then rests</b>. A permanently moving element in a kitchen is noise.</li>
+        <li>Copy is approximate ("~20:40") — never false precision.</li>
+      </ul>
+      <h4>Degradation, in order</h4>
+      <ul>
+        <li>sell rate → inline stock adjust → animated countdown. <b>Never drop the predicted 86 time.</b></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 11 FLOOR ============ -->
+<section class="screen" id="s11">
+  <div class="shead">
+    <span class="num">11</span><h3>Floor map</h3>
+    <span class="meta"><b>/ops/floor</b> · US4 · server / host</span>
+  </div>
+  <div class="row">
+    <div class="wide">
+      <div class="frame-label">desktop / tablet</div>
+      <div class="pad">
+        <div class="box"><span class="lbl">legend — 4 states</span>
+          <div class="flexr"><span class="chip">open</span><span class="chip solid">seated</span>
+            <span class="chip out">dirty</span><span class="chip">held</span>
+            <span class="t mut">status carries a label, not just a fill</span></div>
+        </div>
+        <div class="box"><span class="lbl">zone · window</span>
+          <div class="grid g4c">
+            <div class="box"><div class="t big">T1</div><div class="t">2 seats</div><span class="chip">open</span></div>
+            <div class="box" style="background:var(--g1)"><div class="t big">T2</div><div class="t">4 · Priya</div>
+              <span class="chip solid">seated 34m</span><div class="t mut">mains cooking</div></div>
+            <div class="box"><div class="t big">T3</div><div class="t">2 seats</div><span class="chip out">dirty</span>
+              <div class="btn ghost" style="margin-top:4px">bussed</div></div>
+            <div class="box"><div class="t big">T4</div><div class="t">6 seats</div><span class="chip">held 20:00</span></div>
+          </div>
+        </div>
+        <div class="box"><span class="lbl">zone · bar</span>
+          <div class="grid g4c">
+            <div class="box"><div class="t big">B1</div><span class="chip">open</span></div>
+            <div class="box" style="background:var(--g1)"><div class="t big">B2</div><span class="chip solid">seated 12m</span>
+              <div class="t mut">bill requested</div></div>
+            <div class="box"><div class="t big">B3</div><span class="chip">open</span></div>
+            <div class="box"><div class="t big">B4</div><span class="chip">open</span></div>
+          </div>
+        </div>
+        <div class="box"><span class="lbl">seat next from queue</span>
+          <div class="between"><span class="t">Next: party of 2 · waiting 24 min</span>
+            <div class="flexr"><span class="chip solid">seat at T1</span><span class="chip">no-show</span></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <h4>Intent</h4>
+      <ul>
+        <li>Zones render as a <b>grouped layout, not a literal floor plan</b>. Real coordinates cost more than
+          they're worth here and a grid reads faster anyway. Stated so it doesn't look like an omission.</li>
+        <li>Dwell time here feeds the turn-time model that quotes queue waits — the two features share data.</li>
+      </ul>
+      <h4>Rules</h4>
+      <ul>
+        <li><b>Seating a table with an open order is refused at the API.</b> Two parties on one bill is a
+          real-world disaster; not something to trust the UI to prevent.</li>
+        <li><b>dirty → open is an explicit action.</b> Closing a bill never auto-opens a table — someone has
+          to clear it.</li>
+        <li>A server can't reassign another server's table; manager/owner can.</li>
+        <li>Party larger than seats → warn but allow. Restaurants pull chairs over; don't be more rigid than
+          the room.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 12 INVENTORY ============ -->
+<section class="screen" id="s12">
+  <div class="shead">
+    <span class="num">12</span><h3>Inventory</h3>
+    <span class="meta"><b>/ops/inventory</b> · US4 · manager / owner</span>
+  </div>
+  <div class="row">
+    <div class="wide">
+      <div class="frame-label">desktop</div>
+      <div class="pad">
+        <div class="box"><span class="lbl">attention first</span>
+          <div class="flexr"><span class="chip solid">4 below reorder</span><span class="chip">2 expiring</span>
+            <span class="chip out">1 variance flag</span></div>
+        </div>
+        <div class="box"><span class="lbl">ingredient table</span>
+          <table class="wf">
+            <tr><th>ingredient</th><th>stock</th><th>par</th><th>reorder pt</th><th>supplier</th><th>state</th><th></th></tr>
+            <tr><td>sea bass fillet</td><td><b>4</b> ea</td><td>30</td><td>12</td><td>Coast · 2d</td>
+                <td><span class="chip solid">order 26</span></td><td><span class="chip">adjust</span></td></tr>
+            <tr><td>lamb rump</td><td>11 kg</td><td>20</td><td>8</td><td>Fell · 1d</td>
+                <td><span class="chip">ok</span></td><td><span class="chip">adjust</span></td></tr>
+            <tr><td>double cream</td><td>6 L</td><td>10</td><td>4</td><td>Dairy · 1d</td>
+                <td><span class="chip out">exp 2d</span></td><td><span class="chip">adjust</span></td></tr>
+            <tr><td>butter</td><td>18 kg</td><td>20</td><td>6</td><td>Dairy · 1d</td>
+                <td><span class="chip out">−9% variance</span></td><td><span class="chip">adjust</span></td></tr>
+          </table>
+        </div>
+        <div class="grid g2" style="margin-top:10px">
+          <div class="box"><span class="lbl">adjust — reasoned, never "edit the number"</span>
+            <div class="t mut">reason</div>
+            <div class="flexr"><span class="chip solid">purchase</span><span class="chip">waste</span>
+              <span class="chip">correction</span><span class="chip">count</span></div>
+            <div class="t mut" style="margin-top:8px">quantity</div><div class="box" style="padding:8px"></div>
+            <div class="t mut" style="margin-top:8px">note</div><div class="box" style="padding:8px"></div>
+            <div class="btn" style="margin-top:8px">record movement</div>
+            <div class="t mut">writes a ledger row: who, what, why, when</div>
+          </div>
+          <div class="box"><span class="lbl">movement history — append-only</span>
+            <table class="wf">
+              <tr><th>when</th><th>Δ</th><th>reason</th><th>who</th></tr>
+              <tr><td>today 08:12</td><td>+30</td><td>purchase</td><td>Meera</td></tr>
+              <tr><td>19:40</td><td>−2</td><td>depletion</td><td>order T7</td></tr>
+              <tr><td>19:44</td><td>−1</td><td>waste</td><td>Rahul</td></tr>
+              <tr><td>yest 23:10</td><td>−3</td><td>correction</td><td>count</td></tr>
+            </table>
+            <div class="t mut" style="margin-top:6px">never edited, never deleted</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <h4>Why a ledger, not a number</h4>
+      <ul>
+        <li>There is <b>no "just edit the stock" affordance</b>. That's how inventory systems become fiction.
+          Every change carries a reason and an actor.</li>
+        <li><b>A stock count writes a <code>correction</code> movement for the difference</b> — it does not
+          overwrite the balance. The gap between counted and expected <i>is</i> the variance signal;
+          overwriting destroys the data the Bonus feature needs.</li>
+        <li>Stock is only ever mutated by <code>place_order()</code> or <code>adjust_stock()</code>. Never a
+          bare UPDATE. The reconciliation query in <code>docs/08-runbook.md</code> proves it.</li>
+      </ul>
+      <h4>Rules</h4>
+      <ul>
+        <li>Reorder suggestions are <b>capped by shelf life</b> — otherwise a naive system generates the very
+          waste it was bought to prevent.</li>
+        <li><b>Variance is framed "investigate," never "someone stole this."</b> Over-portioning, bad yields
+          and theft look identical in this data.</li>
+        <li>Costs are owner/manager only, enforced by column grants — never reachable from a guest payload.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 13 BOM EDITOR ============ -->
+<section class="screen" id="s13">
+  <div class="shead">
+    <span class="num">13</span><h3>Recipe / BOM editor — where availability gets configured</h3>
+    <span class="meta"><b>/ops/menu/[id]</b> · US4</span>
+  </div>
+  <div class="row">
+    <div class="wide">
+      <div class="frame-label">desktop · live feedback is the feature</div>
+      <div class="pad">
+        <div class="grid g2">
+          <div class="box"><span class="lbl">dish fields</span>
+            <div class="t mut">name</div><div class="box" style="padding:8px"></div>
+            <div class="t mut" style="margin-top:6px">price</div><div class="box" style="padding:8px"></div>
+            <div class="t mut" style="margin-top:6px">station</div>
+            <div class="flexr"><span class="chip solid">grill</span><span class="chip">sauté</span><span class="chip">larder</span></div>
+            <div class="t mut" style="margin-top:6px">prep minutes · allergens · tags</div>
+            <div class="bar lt" style="width:70%"></div>
+          </div>
+          <div class="box" style="border-width:3px"><span class="lbl">live derived — updates as you type</span>
+            <div class="between"><span class="t">food cost</span><span class="t big">£6.40</span></div>
+            <div class="between"><span class="t">margin</span><span class="t big">£12.60 · 66%</span></div>
+            <div class="between"><span class="t">portions now</span><span class="t big">4</span></div>
+            <div class="between"><span class="t">binding</span><span class="t">sea bass fillet</span></div>
+            <div class="t mut" style="margin-top:8px">this immediacy <b>is</b> the feature — costing stops
+              being a spreadsheet exercise</div>
+          </div>
+        </div>
+
+        <div class="box" style="margin-top:10px"><span class="lbl">bill of materials</span>
+          <table class="wf">
+            <tr><th>ingredient</th><th>qty / portion</th><th>unit cost</th><th>line cost</th><th>stock</th><th>portions</th><th></th></tr>
+            <tr><td>sea bass fillet</td><td>1 ea</td><td>£4.20</td><td>£4.20</td><td>4</td>
+                <td><b>4 ← binding</b></td><td><span class="chip">×</span></td></tr>
+            <tr><td>fennel</td><td>0.15 kg</td><td>£2.80</td><td>£0.42</td><td>6 kg</td><td>40</td><td><span class="chip">×</span></td></tr>
+            <tr><td>butter</td><td>0.03 kg</td><td>£7.00</td><td>£0.21</td><td>18 kg</td><td>600</td><td><span class="chip">×</span></td></tr>
+            <tr><td>lemon</td><td>0.5 ea</td><td>£0.30</td><td>£0.15</td><td>22</td><td>44</td><td><span class="chip">×</span></td></tr>
+          </table>
+          <div class="flexr" style="margin-top:8px"><span class="chip solid">+ add ingredient</span>
+            <span class="t mut">qty &gt; 0 enforced by constraint — zero would divide by zero</span></div>
+        </div>
+
+        <div class="grid g2" style="margin-top:10px">
+          <div class="box"><span class="lbl">manual 86 — override, with expiry</span>
+            <div class="t">Sauce broke / fryer down — 86 regardless of stock.</div>
+            <div class="flexr" style="margin-top:6px"><span class="chip solid">86 until end of service</span>
+              <span class="chip">86 for 1h</span></div>
+            <div class="t mut">an 86 that silently persists to tomorrow is a lost sale nobody notices</div>
+          </div>
+          <div class="box"><span class="lbl">save</span>
+            <div class="btn">save dish + recipe</div>
+            <div class="t mut">BOM replaced wholesale — a half-applied recipe corrupts availability</div>
+            <div class="btn ghost" style="margin-top:8px">archive dish</div>
+            <div class="t mut">archive, never delete — order history references it</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <h4>Why this screen is not cuttable</h4>
+      <ul>
+        <li>Without a BOM editor the differentiator can't be <b>configured</b> or <b>demoed</b>. This is the
+          screen that turns "3 kg of chicken" into "you can serve 6 of these."</li>
+        <li>It's also the natural place to <i>explain</i> the product to a judge: change a quantity, watch
+          margin and portions move together.</li>
+      </ul>
+      <h4>Rules</h4>
+      <ul>
+        <li><b>Archive, never delete.</b> Historical order_items reference dishes; deleting orphans past bills
+          and breaks analytics.</li>
+        <li>Deleting an ingredient still used in a BOM is refused, <b>naming the dependent dishes</b>.</li>
+        <li>Computed 86 and manual 86 stay <b>distinct</b> — one needs a delivery, the other needs a new
+          sauce. Different actions, so different display.</li>
+        <li>Price changes never alter historical <code>unit_price_cents</code>.</li>
+        <li><b>Out of scope, stated:</b> sub-recipes / nested BOMs. Toast supports them; three days doesn't.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 14 RESERVATIONS ADMIN ============ -->
+<section class="screen" id="s14">
+  <div class="shead">
+    <span class="num">14</span><h3>Reservations &amp; queue admin</h3>
+    <span class="meta"><b>/ops/reservations</b> · US3/US4 · host</span>
+  </div>
+  <div class="row">
+    <div class="wide">
+      <div class="frame-label">desktop / tablet · maître d'</div>
+      <div class="pad">
+        <div class="box"><span class="lbl">tonight at a glance</span>
+          <div class="flexr"><span class="chip">42 covers booked</span><span class="chip solid">6 waiting</span>
+            <span class="chip">2 no-show risk</span><span class="chip">quote 20–30m</span></div>
+        </div>
+        <div class="grid g2" style="margin-top:10px">
+          <div class="box"><span class="lbl">bookings</span>
+            <table class="wf">
+              <tr><th>time</th><th>party</th><th>name</th><th>table</th><th></th></tr>
+              <tr><td>19:00</td><td>2</td><td>—</td><td>T2</td><td><span class="chip">seated</span></td></tr>
+              <tr><td>20:00</td><td>6</td><td>—</td><td>T4 held</td><td><span class="chip solid">seat</span></td></tr>
+              <tr><td>20:30</td><td>4</td><td>—</td><td>—</td><td><span class="chip">assign</span></td></tr>
+              <tr><td>19:15</td><td>2</td><td>—</td><td>T9 held</td><td><span class="chip out">no-show 15m</span></td></tr>
+            </table>
+            <div class="t mut" style="margin-top:6px">grace window before a held table is released</div>
+          </div>
+          <div class="box"><span class="lbl">walk-in queue</span>
+            <table class="wf">
+              <tr><th>#</th><th>party</th><th>waiting</th><th>quoted</th><th></th></tr>
+              <tr><td>1</td><td>2</td><td>24m</td><td>20–30m</td><td><span class="chip solid">seat</span></td></tr>
+              <tr><td>2</td><td>4</td><td>18m</td><td>35–45m</td><td><span class="chip">notify</span></td></tr>
+              <tr><td>3</td><td>2</td><td>9m</td><td>40–50m</td><td><span class="chip">notify</span></td></tr>
+            </table>
+            <div class="btn ghost" style="margin-top:8px">+ add walk-in</div>
+          </div>
+        </div>
+        <div class="box" style="margin-top:10px"><span class="lbl">turn-time model — inspectable</span>
+          <div class="t">median turn: 1–2 top <b>68m</b> · 3–4 top <b>84m</b> · 5–6 top <b>97m</b> · 7+ <b>default 110m (thin data)</b></div>
+          <div class="t mut">buckets, not exact party size — 3 vs 4 is noise, 2 vs 4 is not</div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <h4>Intent</h4>
+      <ul>
+        <li>Reservations and walk-ins <b>compete for the same tables</b>, so they belong on one screen. A held
+          table is excluded from queue capacity.</li>
+        <li>Exposing the turn-time medians makes the quote inspectable rather than magic — and lets a host
+          override it with judgment when they know better.</li>
+      </ul>
+      <h4>Rules</h4>
+      <ul>
+        <li>Thin-data buckets are <b>labelled as defaults</b>, not presented as measured.</li>
+        <li>No-show past the grace window releases the table rather than blocking it all night.</li>
+        <li>No booking outside <code>service_hours</code>.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 15 ANALYTICS ============ -->
+<section class="screen" id="s15">
+  <div class="shead">
+    <span class="num">15</span><h3>Analytics — menu engineering</h3>
+    <span class="meta"><b>/ops/analytics</b> · US4 + US5 · owner / manager</span>
+  </div>
+  <div class="row">
+    <div class="wide">
+      <div class="frame-label">desktop · load the dataviz skill before building charts</div>
+      <div class="pad">
+        <div class="box"><span class="lbl">service summary</span>
+          <div class="grid g5c">
+            <div><div class="t mut">covers</div><div class="t big">118</div></div>
+            <div><div class="t mut">revenue</div><div class="t big">£4,210</div></div>
+            <div><div class="t mut">per cover</div><div class="t big">£35.70</div></div>
+            <div><div class="t mut">avg turn</div><div class="t big">74m</div></div>
+            <div><div class="t mut">food cost</div><div class="t big">29.4%</div>
+              <div class="t mut" style="font-size:9px">vs 28–32% band</div></div>
+          </div>
+        </div>
+
+        <div class="box" style="border-width:3px"><span class="lbl">menu engineering matrix — the centrepiece</span>
+          <div style="display:flex;gap:10px;align-items:stretch">
+            <div class="t mut" style="writing-mode:vertical-rl;transform:rotate(180deg);text-align:center">margin →</div>
+            <div style="flex:1">
+              <div class="grid g2" style="gap:2px">
+                <div class="box" style="min-height:110px"><span class="lbl">puzzle</span>
+                  <div class="t mut">low pop · high margin</div>
+                  <div class="t"><b>promote / reposition</b></div>
+                  <div class="flexr" style="margin-top:6px;flex-wrap:wrap"><span class="chip">●</span><span class="chip">●</span></div></div>
+                <div class="box" style="min-height:110px;background:var(--g1)"><span class="lbl">star</span>
+                  <div class="t mut">high pop · high margin</div>
+                  <div class="t"><b>protect &amp; feature</b></div>
+                  <div class="flexr" style="margin-top:6px;flex-wrap:wrap"><span class="chip solid">●</span><span class="chip solid">●</span><span class="chip solid">●</span></div></div>
+                <div class="box" style="min-height:110px"><span class="lbl">dog</span>
+                  <div class="t mut">low pop · low margin</div>
+                  <div class="t"><b>cut</b></div>
+                  <div class="flexr" style="margin-top:6px"><span class="chip out">●</span></div></div>
+                <div class="box" style="min-height:110px"><span class="lbl">plowhorse</span>
+                  <div class="t mut">high pop · low margin</div>
+                  <div class="t"><b>reprice / re-engineer</b></div>
+                  <div class="flexr" style="margin-top:6px;flex-wrap:wrap"><span class="chip">●</span><span class="chip">●</span></div></div>
+              </div>
+              <div class="t mut" style="text-align:center;margin-top:4px">popularity →</div>
+            </div>
+          </div>
+          <div class="callout"><b>Quadrants are labelled in text</b>, so the chart isn't colour-only. Boundaries
+            use <b>medians</b>, not means — one outlier dish shouldn't move the lines.</div>
+        </div>
+
+        <div class="grid g2" style="margin-top:10px">
+          <div class="box"><span class="lbl">demand forecast</span>
+            <div class="blk" style="height:90px">bar/line chart — next 7 days</div>
+            <div class="t">Sat dinner: <b>prep 18 branzino</b></div>
+            <div class="t mut">EWMA by weekday × daypart · estimate, explicit horizon, no fake CIs</div>
+          </div>
+          <div class="box"><span class="lbl">inventory intelligence</span>
+            <div class="t">reorder: 4 ingredients</div>
+            <div class="t">variance: butter <b>−9%</b> over 7d</div>
+            <div class="blk" style="height:60px">variance by ingredient</div>
+            <div class="t mut">"investigate," never "theft"</div>
+          </div>
+        </div>
+
+        <div class="box"><span class="lbl">insufficient data state</span>
+          <div class="t">"Not enough data for this range."</div>
+          <div class="t mut">a 2-day range gets this, not a confidently drawn trend — the failure mode that
+            makes hackathon analytics look fake</div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <h4>Bar to clear</h4>
+      <ul>
+        <li>Every chart must answer a question an owner actually has — <b>what lost money, what to order,
+          where stock is going</b> — not plot revenue over time because it's easy.</li>
+        <li>The matrix is the chart that makes an owner change something on Monday. It's the most credible
+          Gold/Platinum artifact and it's computed from data the product already has.</li>
+      </ul>
+      <h4>Rules</h4>
+      <ul>
+        <li><b>Historical cost, not current.</b> Margin uses cost as at time of sale — if a supplier raises a
+          price today, last month's profit must not change, or the numbers are unauditable.</li>
+        <li><b>No realtime here.</b> A matrix that reshuffles while you read it is worse, not better.</li>
+        <li>Archived dishes still appear in historical ranges — they sold in that period.</li>
+        <li>Owner/manager only. These payloads contain cost and margin.</li>
+      </ul>
+      <h4>Depends on</h4>
+      <ul>
+        <li><b>The 6-week seed script.</b> Without it every panel here is empty and the forecast has no
+          signal. That's why it's day-1 core work, not scaffolding.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<div class="intro">
+  <h2>What's deliberately absent</h2>
+  <p><strong>Staff management</strong> (cut-line 1), <strong>split billing</strong> (cut-line 2),
+     <strong>supplier auto-ordering</strong> (3), and <strong>dish modifiers</strong> (5) have no wireframe.
+     They're documented in <code>docs/features/</code> with their cut rationale. Wireframing what's most
+     likely to be dropped invites building it.</p>
+  <p><strong>No palette, no typefaces, no spacing system.</strong> Those are free axes for
+     <code>frontend-design</code>, with one constraint from <code>CLAUDE.md</code>: don't spend them on the
+     three known AI-design defaults. Flagged risk — a thermal-docket aesthetic is <em>right</em> for the KDS
+     but sits one step from the "broadsheet, hairline rules, zero radius" cluster. Keep the docket a
+     component, not the whole page.</p>
+</div>
+
+</main>

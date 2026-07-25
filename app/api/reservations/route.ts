@@ -4,8 +4,15 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 /**
  * Book a table.
  *
- * Capacity is checked HERE rather than trusted from the picker: the greyed-out slots
- * in the UI are convenience, and a request that skips the UI must still be refused.
+ * Delegates to `book_table()`. It used to make the capacity decision here, which was
+ * wrong in a way that took an end-to-end test to see: `tables_read` requires
+ * is_staff(), so counting "tables that fit this party" as the DINER returned zero, and
+ * every booking was refused as fully booked. The rule needs data the caller may not
+ * read, so it belongs in the database — the same reasoning as `place_order()` and
+ * `join_queue()`. See supabase/patches/005_booking_capacity.sql.
+ *
+ * This route's whole job is now turning typed errors into something a hungry person
+ * can act on.
  */
 export async function POST(request: Request) {
   let body: { restaurantId?: string; partySize?: number; requestedAt?: string; guestName?: string };
@@ -24,7 +31,7 @@ export async function POST(request: Request) {
   }
 
   const when = new Date(requestedAt);
-  if (Number.isNaN(when.getTime()) || when.getTime() < Date.now() - 60_000) {
+  if (Number.isNaN(when.getTime())) {
     return NextResponse.json(
       { code: "BAD_TIME", message: "Choose a time in the future." },
       { status: 400 },
@@ -32,61 +39,62 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json(
-      { code: "NOT_AUTHENTICATED", message: "Sign in to book a table." },
-      { status: 401 },
-    );
-  }
-
-  // Capacity for the window: tables that fit, minus bookings already holding one.
-  const windowStart = new Date(when.getTime() - 90 * 60_000).toISOString();
-  const windowEnd = new Date(when.getTime() + 90 * 60_000).toISOString();
-
-  const [{ count: fitting }, { count: taken }] = await Promise.all([
-    supabase
-      .from("tables")
-      .select("id", { count: "exact", head: true })
-      .eq("restaurant_id", restaurantId)
-      .gte("seats", partySize!),
-    supabase
-      .from("reservations")
-      .select("id", { count: "exact", head: true })
-      .eq("restaurant_id", restaurantId)
-      .in("status", ["booked", "seated"])
-      .gte("requested_at", windowStart)
-      .lte("requested_at", windowEnd),
-  ]);
-
-  if ((fitting ?? 0) - (taken ?? 0) <= 0) {
-    return NextResponse.json(
-      {
-        code: "NO_CAPACITY",
-        message: "That time is fully booked. Try another, or join the walk-in queue.",
-      },
-      { status: 409 },
-    );
-  }
-
-  const { data, error } = await supabase
-    .from("reservations")
-    .insert({
-      restaurant_id: restaurantId,
-      guest_id: user.id,
-      guest_name: guestName ?? "",
-      party_size: partySize,
-      requested_at: when.toISOString(),
-      source: "web",
-    })
-    .select("id")
-    .single();
+  const { data, error } = await supabase.rpc("book_table", {
+    p_restaurant_id: restaurantId,
+    p_party_size: partySize,
+    p_requested_at: when.toISOString(),
+    p_guest_name: guestName ?? "",
+  });
 
   if (error) {
+    const raw = `${error.message ?? ""} ${(error as { details?: string }).details ?? ""}`;
+
+    if (raw.includes("NOT_AUTHENTICATED")) {
+      return NextResponse.json(
+        { code: "NOT_AUTHENTICATED", message: "Sign in to book a table." },
+        { status: 401 },
+      );
+    }
+    if (raw.includes("BAD_TIME")) {
+      return NextResponse.json(
+        { code: "BAD_TIME", message: "Choose a time in the future." },
+        { status: 400 },
+      );
+    }
+    if (raw.includes("BAD_PARTY_SIZE")) {
+      return NextResponse.json(
+        { code: "BAD_PARTY_SIZE", message: "We can book parties of 1 to 20." },
+        { status: 400 },
+      );
+    }
+    // "No table here is that big" and "that hour is busy" send a guest to different
+    // places, so they do not share a message.
+    if (raw.includes("PARTY_TOO_LARGE")) {
+      return NextResponse.json(
+        {
+          code: "NO_CAPACITY",
+          message: "That party is larger than any single table. Call us and we'll join tables.",
+        },
+        { status: 409 },
+      );
+    }
+    if (raw.includes("NO_CAPACITY")) {
+      return NextResponse.json(
+        {
+          code: "NO_CAPACITY",
+          message: "That time is fully booked. Try another, or join the walk-in queue.",
+        },
+        { status: 409 },
+      );
+    }
+    if (raw.includes("ALREADY_BOOKED")) {
+      return NextResponse.json(
+        { code: "ALREADY_BOOKED", message: "You already have a table booked around then." },
+        { status: 409 },
+      );
+    }
     return NextResponse.json({ code: "ERROR", message: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ reservationId: data.id }, { status: 201 });
+  return NextResponse.json({ reservationId: data }, { status: 201 });
 }

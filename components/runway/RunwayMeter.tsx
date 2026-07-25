@@ -126,13 +126,21 @@ export function RunwayMeter({
   const spent = showTicks ? Math.min(SPENT_SHOWN, TICK_LIMIT - portions) : 0;
 
   // The sentence a human would say. Screen readers get this instead of the ticks.
+  //
+  // These branches must stay in the SAME ORDER as the visible ones below, including
+  // lastsThroughService. They didn't: the visible text said "enough for tonight" while
+  // this label said "runs out about 23:14" for the same dish, so a screen-reader user
+  // was given a prediction the screen had deliberately suppressed. Caught by
+  // npm run verify:features comparing the two counts.
   const label = [
     `${portions} portion${portions === 1 ? "" : "s"} left`,
     insufficientHistory
       ? "not enough history to predict"
-      : predicted86At
-        ? `runs out about ${runway.predicted86Label}`
-        : "service closed",
+      : lastsThroughService
+        ? "enough for tonight"
+        : predicted86At
+          ? `runs out about ${runway.predicted86Label}`
+          : "service closed",
   ].join(", ");
 
   return (

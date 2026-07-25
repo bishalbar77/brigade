@@ -222,6 +222,20 @@ assert "dish_ingredient_names exists (names without quantities, for guests)" \
 assert "no index depends on a non-IMMUTABLE expression" \
   "select count(*) from pg_index i join pg_class c on c.oid=i.indexrelid where pg_get_indexdef(i.indexrelid) like '%::date%'" "0"
 
+assert "an order attached to a table seats it (the floor map reads tables.status)" \
+  "select count(*) from pg_trigger where tgname='orders_seat_table' and not tgisinternal" "1"
+
+# Booking capacity depends on counting tables, which tables_read hides from diners. The
+# decision therefore has to be security definer, or every booking is refused.
+assert "book_table exists and runs as definer (a diner cannot count tables)" \
+  "select prosecdef from pg_proc where proname='book_table'" "t"
+
+assert "a diner can see how many tables exist" \
+  "select has_table_privilege('anon','restaurant_table_count','select')" "t"
+
+assert "a diner can see when the book is busy, without seeing who booked" \
+  "select count(*) from information_schema.columns where table_name='reservation_load' and column_name in ('guest_id','guest_name')" "0"
+
 echo
 if [[ $FAILED -eq 0 ]]; then
   echo "✔ SQL executes cleanly, every patch is genuinely re-runnable, and every"

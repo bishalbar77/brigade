@@ -14,8 +14,10 @@
     "sql:bundle": "node scripts/bundle-sql.mjs",
     "seed": "tsx --env-file=.env.local supabase/seed/seed.ts",
     "verify:data": "tsx --env-file=.env.local scripts/verify-data.ts",
+    "verify:features": "node --env-file=.env.local scripts/verify-features.mjs",
     "sql:check": "bash scripts/sql-check.sh",
-    "sql:lint": "node scripts/sql-lint.mjs"
+    "sql:lint": "node scripts/sql-lint.mjs",
+    "check": "bash scripts/check-all.sh"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

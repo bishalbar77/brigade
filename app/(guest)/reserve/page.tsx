@@ -46,13 +46,21 @@ export default async function ReservePage() {
   const horizonEnd = new Date(now);
   horizonEnd.setDate(horizonEnd.getDate() + DAYS_AHEAD + 1);
 
-  const [{ data: tables }, { data: booked }, { data: myQueue }] = await Promise.all([
-    supabase.from("tables").select("seats").eq("restaurant_id", restaurant.id),
+  // restaurant_table_count and reservation_load, not `tables` and `reservations`.
+  // A diner cannot read either table — tables_read is staff-only and
+  // reservations_read_own shows them only their own — so querying them here returned
+  // no tables and no bookings, and this page drew every slot as free while the API
+  // refused all of them. See supabase/patches/005_booking_capacity.sql.
+  const [{ data: capacity }, { data: booked }, { data: myQueue }] = await Promise.all([
     supabase
-      .from("reservations")
+      .from("restaurant_table_count")
+      .select("table_count")
+      .eq("restaurant_id", restaurant.id)
+      .maybeSingle(),
+    supabase
+      .from("reservation_load")
       .select("requested_at, party_size")
       .eq("restaurant_id", restaurant.id)
-      .in("status", ["booked", "seated"])
       .gte("requested_at", now.toISOString())
       .lte("requested_at", horizonEnd.toISOString()),
     user
@@ -65,7 +73,7 @@ export default async function ReservePage() {
       : Promise.resolve({ data: null }),
   ]);
 
-  const tableCount = (tables ?? []).length || 1;
+  const tableCount = (capacity as { table_count: number } | null)?.table_count ?? 1;
 
   const days: { key: string; label: string; slots: Slot[]; closed: boolean }[] = [];
 

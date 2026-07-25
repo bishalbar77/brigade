@@ -571,10 +571,31 @@ async function main(): Promise<void> {
       opened_at: openedAt.toISOString(), subtotal_cents: subtotal, tax_cents: tax,
       total_cents: subtotal + tax,
     });
-    await db.from("tables").update({ status: "seated" }).eq("id", table.id);
   }
   await chunkInsert("orders", openOrders);
   await chunkInsert("order_items", openItems);
+
+  // ---- normalise the floor, LAST and deliberately.
+  //
+  // Six weeks of historical orders each carry a table_id, and patch 004 added a trigger
+  // that seats a table whenever an order is attached to it. Correct in service, wrong
+  // here: replaying history seated all twelve tables and nothing released them, because
+  // pay_order() — which is what sets 'dirty' — never runs for rows inserted directly.
+  // The floor map then showed a permanently full restaurant, and verify:features could
+  // not find an open table to order at.
+  //
+  // So the seed states the floor explicitly once the history is in, rather than letting
+  // it fall out of the replay: open by default, seated where there is a live order, and
+  // one table left dirty so the bussing state is visible on the screen rather than only
+  // in the enum.
+  await db.from("tables").update({ status: "open" }).eq("restaurant_id", restaurantId);
+  for (const table of liveTables) {
+    await db.from("tables").update({ status: "seated" }).eq("id", table.id);
+  }
+  const dirtyTable = tableList[3];
+  if (dirtyTable) {
+    await db.from("tables").update({ status: "dirty" }).eq("id", dirtyTable.id);
+  }
 
   // a waiting queue so the host screen has something in it
   await chunkInsert("queue_entries", [
@@ -586,7 +607,51 @@ async function main(): Promise<void> {
       joined_at: new Date(now.getTime() - 18 * 60_000).toISOString() },
   ]);
 
-  console.log(`  ${openOrders.length} live orders + queue for today\n`);
+  // A book of upcoming reservations.
+  //
+  // This was missing entirely until npm run verify:features asked the host's screen to
+  // prove it had something on it: the reservations table was EMPTY, so /ops/reservations
+  // — a Silver user-story screen — demoed as a blank page, and every booking slot on
+  // /reserve showed free because nothing was ever taken. Booking worked; there was just
+  // nothing to look at, which is indistinguishable from broken to anyone watching.
+  //
+  // Deliberately uneven: tonight is busy from 19:00, tomorrow's lunch is quiet, and
+  // Saturday evening is nearly full. A book with one booking an hour looks generated,
+  // and greyed-out slots on /reserve only mean something if some hours are fuller than
+  // others.
+  const bookings: Record<string, unknown>[] = [];
+  const bookingShape: [number, number, number[]][] = [
+    // [days ahead, first hour, party sizes]
+    [0, 19, [2, 2, 4, 2, 6, 4, 2]],
+    [1, 12, [2, 4]],
+    [1, 19, [2, 4, 2, 8]],
+    [2, 19, [4, 2, 2, 6, 2, 4, 2, 2]],
+    [3, 13, [2, 2, 4]],
+  ];
+  for (const [daysAhead, firstHour, parties] of bookingShape) {
+    parties.forEach((partySize, i) => {
+      const at = new Date(now);
+      at.setDate(at.getDate() + daysAhead);
+      at.setHours(firstHour + Math.floor(i / 2), (i % 2) * 30, 0, 0);
+      if (at.getTime() < now.getTime() + 30 * 60_000) return; // never seed the past
+      const guest = GUESTS[i % GUESTS.length]!;
+      bookings.push({
+        restaurant_id: restaurantId,
+        // Most of the book is walk-up phone bookings with no account behind them, which
+        // is how a real book looks. A few belong to the demo guests so a signed-in diner
+        // has a booking of their own to see.
+        guest_id: i % 3 === 0 ? userIds.get(guest.email)! : null,
+        guest_name: i % 3 === 0 ? guest.name : ["Achebe", "Nakamura", "Okafor", "Lindqvist", "Batra"][i % 5]!,
+        party_size: partySize,
+        requested_at: at.toISOString(),
+        source: i % 4 === 0 ? "phone" : "web",
+        status: "booked",
+      });
+    });
+  }
+  await chunkInsert("reservations", bookings);
+
+  console.log(`  ${openOrders.length} live orders + queue + ${bookings.length} bookings\n`);
 
   // ---- summary
   const { data: avail } = await db.from("dish_availability").select("dish_id, portions")

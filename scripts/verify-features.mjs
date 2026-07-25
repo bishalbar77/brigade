@@ -211,6 +211,23 @@ async function setUp() {
 
   const { body: ings } = await db("ingredients?select=id,name,stock_qty&order=name&limit=400");
   S.ingredients = ings ?? [];
+
+  // Reset only what THIS test owns, before testing rather than after.
+  //
+  // Relying on the cleanup at the end is not enough: a run that dies halfway leaves a
+  // queue place and a booking behind, and then "a walk-in joins the queue" comes back
+  // 409 ALREADY_QUEUED forever. That check had silently degraded to "already in the queue
+  // from an earlier run" — a soft pass, which is the failure mode where a suite stops
+  // testing something and keeps printing a tick.
+  for (const who of [S.priya, S.dan]) {
+    if (!who?.userId) continue;
+    await db(`queue_entries?guest_id=eq.${who.userId}&status=in.(waiting,notified)`, {
+      method: "PATCH", body: JSON.stringify({ status: "left" }),
+    });
+    await db(`reservations?guest_id=eq.${who.userId}&requested_at=gte.${new Date().toISOString()}`, {
+      method: "DELETE",
+    });
+  }
 }
 
 /**
@@ -219,7 +236,7 @@ async function setUp() {
  * Probing for a free slot rather than hard-coding "tomorrow at 19:00" keeps the test
  * about the booking code instead of about how busy the seeded book happens to be.
  */
-async function findFreeSlot(partySize) {
+async function findFreeSlot(partySize, guestId) {
   const { body: fitting } = await db(
     `tables?select=id&restaurant_id=eq.${S.restaurant.id}&seats=gte.${partySize}`);
   if (!fitting?.length) return null;
@@ -231,13 +248,23 @@ async function findFreeSlot(partySize) {
       const from = new Date(when.getTime() - 90 * 60_000).toISOString();
       const to = new Date(when.getTime() + 90 * 60_000).toISOString();
       const { body: taken } = await db(
-        `reservations?select=id&restaurant_id=eq.${S.restaurant.id}` +
+        `reservations?select=id,guest_id&restaurant_id=eq.${S.restaurant.id}` +
         `&status=in.(booked,seated)&requested_at=gte.${from}&requested_at=lte.${to}`);
-      if (fitting.length - (taken?.length ?? 0) > 0) return when;
+      if (fitting.length - (taken?.length ?? 0) <= 0) continue;
+      // book_table also refuses a second booking by the same guest within ±60 minutes,
+      // so a slot the restaurant can take is not necessarily one THIS guest can.
+      if (guestId && (taken ?? []).some((t) => t.guest_id === guestId)) continue;
+      return when;
     }
   }
   return null;
 }
+
+/**
+ * Compare text to rendered HTML without tripping over escaping. "Chef's salad" ships as
+ * "Chef&#x27;s salad", and an apostrophe in a dish name is not a bug worth failing on.
+ */
+const flat = (s) => s.replace(/&[#\w]+;/g, "").replace(/[^a-z0-9]/gi, "").toLowerCase();
 
 /** Reverse everything one order consumed, through the sanctioned path. */
 async function putStockBack(orderId) {
@@ -303,8 +330,15 @@ async function main() {
     run: async (ok) => {
       const page = await app("/menu");
       ok("the menu page loads for a stranger", page.status === 200, `HTTP ${page.status}`);
-      ok("it shows real dish names", S.menu.length > 0 && page.text.includes(S.menu[0].name),
-        `${S.menu.length} dishes on the menu`);
+
+      // Every dish, not just the first one. Checking a single name passed for days and
+      // then failed the moment a reseed reordered the rows and put an apostrophe first.
+      const rendered = flat(page.text.replace(/<script[\s\S]*?<\/script>/g, ""));
+      const shown = S.menu.filter((d) => rendered.includes(flat(d.name)));
+      ok("it shows the real dishes, by name", S.menu.length > 0 && shown.length === S.menu.length,
+        `${shown.length} of ${S.menu.length} dishes on the page` +
+        (shown.length === S.menu.length ? "" :
+          ` — missing: ${S.menu.filter((d) => !shown.includes(d)).map((d) => d.name).join(", ")}`));
 
       const fields = S.menu[0] ? Object.keys(S.menu[0]) : [];
       ok("no cost or profit figure is reachable", !fields.some((f) => /cost|margin/i.test(f)));
@@ -480,6 +514,17 @@ async function main() {
       ok("it shows real table labels", S.table ? page.text.includes(S.table.label) : false,
         S.table ? `table ${S.table.label}` : "no open table found");
 
+      // A floor where every table reads the same is either a runaway trigger or nothing
+      // wired at all, and both look plausible on screen. Seeding history through patch
+      // 004's trigger seated all twelve at once, which is how this check earned its place.
+      const { body: all } = await db(
+        `tables?select=label,status&restaurant_id=eq.${S.restaurant.id}`);
+      const tally = {};
+      for (const t of all ?? []) tally[t.status] = (tally[t.status] ?? 0) + 1;
+      ok("the room is in more than one state, and something is free to seat",
+        Object.keys(tally).length > 1 && (tally.open ?? 0) > 0,
+        Object.entries(tally).map(([k, v]) => `${v} ${k}`).join(", "));
+
       if (S.table) {
         const { body } = await db(`tables?select=status&id=eq.${S.table.id}`);
         S.tableStatusBeforePaying = body?.[0]?.status;
@@ -503,7 +548,7 @@ async function main() {
 
       // Find a slot that genuinely has room. The seeded book is busy, and asserting
       // "a booking succeeds" against an already-full Friday tests the seed, not the code.
-      const slot = await findFreeSlot(2);
+      const slot = await findFreeSlot(2, S.priya.userId);
       const booked = slot ? await app("/api/reservations", {
         session: S.priya, method: "POST",
         body: { restaurantId: S.restaurant.id, partySize: 2, requestedAt: slot.toISOString(), guestName: "Priya Shah" },
@@ -514,12 +559,28 @@ async function main() {
       S.reservationId = booked.json?.reservationId;
 
       const when = slot ?? new Date(Date.now() + 20 * 3600_000);
-      const huge = await app("/api/reservations", {
+
+      // "Bigger than any table here" and "more people than we take bookings for" are
+      // different facts and get different answers. Sized off the real seat range, so
+      // this keeps working if the floor plan changes.
+      const { body: cap } = await db(
+        `restaurant_table_count?select=max_seats&restaurant_id=eq.${S.restaurant.id}`);
+      const tooBig = Math.min((cap?.[0]?.max_seats ?? 8) + 1, 20);
+      const large = await app("/api/reservations", {
+        session: S.priya, method: "POST",
+        body: { restaurantId: S.restaurant.id, partySize: tooBig, requestedAt: when.toISOString() },
+      });
+      ok("a party bigger than any table is turned down, and offered a way forward",
+        large.status === 409 && /join tables/i.test(large.json?.message ?? ""),
+        `party of ${tooBig} vs a largest table of ${cap?.[0]?.max_seats} → "${large.json?.message ?? ""}"`);
+
+      const absurd = await app("/api/reservations", {
         session: S.priya, method: "POST",
         body: { restaurantId: S.restaurant.id, partySize: 400, requestedAt: when.toISOString() },
       });
-      ok("a party nobody can seat is turned down, with somewhere else to go",
-        huge.status === 409 && huge.json?.code === "NO_CAPACITY", `"${huge.json?.message ?? ""}"`);
+      ok("a party of 400 is refused as a party size, not as a busy evening",
+        absurd.status === 400 && absurd.json?.code === "BAD_PARTY_SIZE",
+        `"${absurd.json?.message ?? ""}"`);
 
       const past = await app("/api/reservations", {
         session: S.priya, method: "POST",
@@ -537,24 +598,31 @@ async function main() {
         session: S.dan, method: "POST",
         body: { restaurantId: S.restaurant.id, partySize: 2, guestName: "Dan Whitlock" },
       });
+      // No soft pass here: setUp released this guest's place, so a 409 now is a real
+      // failure and not "someone was already in the queue".
       const first = queued.status === 201 ? queued.json : null;
-      const already = queued.status === 409;
-      ok("a walk-in joins the queue and is quoted a wait",
-        Boolean(first?.quotedMinutes > 0) || already,
-        already ? "already in the queue from an earlier run" : `position ${first?.position}, about ${first?.quotedMinutes} minutes`);
+      ok("a walk-in joins the queue and is quoted a wait", Boolean(first?.quotedMinutes > 0),
+        first ? `position ${first.position}, about ${first.quotedMinutes} minutes`
+              : `HTTP ${queued.status} · ${queued.json?.code ?? ""}`);
+      S.queueId = first?.queueId;
 
-      if (first) {
-        const twice = await app("/api/queue", {
-          session: S.dan, method: "POST", body: { restaurantId: S.restaurant.id, partySize: 2 },
-        });
-        ok("the same party cannot join twice", twice.status === 409, `HTTP ${twice.status}`);
-        S.queueId = first.queueId;
-      } else {
-        ok("the same party cannot join twice", true, "proved by the 409 above");
-      }
+      const twice = await app("/api/queue", {
+        session: S.dan, method: "POST", body: { restaurantId: S.restaurant.id, partySize: 2 },
+      });
+      ok("the same party cannot join twice", twice.status === 409,
+        `HTTP ${twice.status} · "${twice.json?.message ?? ""}"`);
 
       const desk = await app("/ops/reservations", { session: S.host });
       ok("the host's book loads", desk.status === 200, `HTTP ${desk.status}`);
+
+      // "It loaded" is not "it has anything on it". The reservations table was empty for
+      // two days and this screen demoed as a blank page while every check above passed.
+      const { body: upcoming } = await db(
+        `reservations?select=id&restaurant_id=eq.${S.restaurant.id}` +
+        `&status=in.(booked,seated)&requested_at=gte.${new Date().toISOString()}`);
+      ok("and has a real book of upcoming bookings on it, not an empty screen",
+        (upcoming?.length ?? 0) >= 5 && desk.text.includes("Walk-in"),
+        `${upcoming?.length ?? 0} bookings ahead, and the walk-in queue is shown alongside`);
     },
   });
 

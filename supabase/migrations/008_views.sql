@@ -23,6 +23,12 @@ group by d.id, d.restaurant_id, d.manual_86_until;
 comment on view dish_availability is
   'Portions available per dish, from the recipe BOM against live stock. The binding ingredient decides: six steaks and one lemon means one steak dish.';
 
+-- sql-lint flags this view for running as owner with no tenancy filter. Intentional:
+-- a guest must read portions with no account at all, and an anonymous caller has
+-- current_restaurant() = null, so a filter would return nothing and delete the
+-- product's central feature. It exposes only dish_id + portions for dishes that are
+-- already publicly readable — no stock levels, no ingredient names, no cost.
+
 -- Which ingredient is the constraint. "Branzino 86s at 20:40" is information;
 -- "because you have 4 lemons" is something a chef can act on in five minutes.
 create view dish_binding_ingredient as

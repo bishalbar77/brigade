@@ -2,7 +2,7 @@
   "name": "brigade",
   "version": "0.1.0",
   "private": true,
-  "description": "Restaurant operations platform — the menu as a live function of the pantry.",
+  "description": "Restaurant operations platform \u2014 the menu as a live function of the pantry.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -13,7 +13,9 @@
     "test:watch": "vitest",
     "sql:bundle": "node scripts/bundle-sql.mjs",
     "seed": "tsx --env-file=.env.local supabase/seed/seed.ts",
-    "verify:data": "tsx --env-file=.env.local scripts/verify-data.ts"
+    "verify:data": "tsx --env-file=.env.local scripts/verify-data.ts",
+    "sql:check": "bash scripts/sql-check.sh",
+    "sql:lint": "node scripts/sql-lint.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

@@ -50,7 +50,8 @@ export async function POST(request: Request) {
 
   const row = Array.isArray(data) ? data[0] : data;
   return NextResponse.json(
-    { queueId: row?.queue_id, position: row?.position, quotedMinutes: row?.quoted_minutes },
+    // queue_position, not position — see the note in patch 003; `position` is reserved.
+    { queueId: row?.queue_id, position: row?.queue_position, quotedMinutes: row?.quoted_minutes },
     { status: 201 },
   );
 }

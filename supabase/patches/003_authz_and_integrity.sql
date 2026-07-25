@@ -162,8 +162,20 @@ order by d.id, floor(i.stock_qty / nullif(ri.qty, 0)) asc, i.name asc;
 -- projection itself becomes writable only by the definer functions.
 -- ═══════════════════════════════════════════════════════════════════════════════
 
-revoke update (stock_qty) on ingredients from authenticated;
-revoke update (stock_qty) on ingredients from anon;
+-- ⚠ A column-level REVOKE alone would be a NO-OP here, which is a trap worth naming.
+-- Postgres: "the revocation of a column-level privilege will not revoke a table-level
+-- privilege" — and Supabase grants table-wide UPDATE to `authenticated` by default. So
+-- `revoke update (stock_qty)` looks like it works and changes nothing.
+--
+-- The working shape is: drop the table-wide grant, then re-grant every column EXCEPT
+-- stock_qty. RLS still applies on top (ingredients_write requires is_manager()); this
+-- is about which COLUMNS a manager may touch, not who counts as a manager.
+revoke update on ingredients from authenticated;
+revoke update on ingredients from anon;
+
+grant update (
+  name, unit, par_level, reorder_point, cost_per_unit_cents, supplier_id, shelf_life_days
+) on ingredients to authenticated;
 
 -- Belt and braces: stock cannot be negative. place_order() already refuses, but
 -- nothing stopped a correction driving it below zero.
@@ -213,6 +225,13 @@ join ingredients i on i.id = ri.ingredient_id;
 
 comment on view dish_ingredient_names is
   'Ingredient NAMES per dish for the guest dish page. Deliberately carries no qty and no cost — the quantities are the recipe.';
+
+-- sql-lint flags this view for having no security mode, and the answer is: intentional.
+-- It CANNOT filter on current_restaurant(), because a guest's profile has
+-- restaurant_id = null by design (guests are global, staff belong to a restaurant), so
+-- any tenancy filter here would return nothing and break the dish page for exactly the
+-- people it exists for. What it exposes is the ingredient names of a publicly-readable
+-- menu — which a printed menu already tells you. No qty, no cost, no stock.
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- 7. pay_order() — a guest could not pay their own bill.
@@ -319,7 +338,11 @@ create or replace function join_queue(
   p_restaurant_id uuid,
   p_party_size    int,
   p_guest_name    text default ''
-) returns table (queue_id uuid, position int, quoted_minutes int)
+-- NOTE: the out-column is `queue_position`, not `position`. `position` is a reserved
+-- word in Postgres (it is the position(substring in string) function), so it cannot
+-- name a column in a RETURNS TABLE clause without quoting — and quoted identifiers
+-- are worse to live with than a clearer name.
+) returns table (queue_id uuid, queue_position int, quoted_minutes int)
 language plpgsql security definer set search_path = public as $$
 declare
   v_ahead      int;

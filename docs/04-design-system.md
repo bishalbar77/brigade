@@ -19,17 +19,31 @@ diner in a dim room (a bright screen blinds her and kills the mood) and a cook o
 (dark reduces fatigue, bone-on-espresso holds contrast at 2 m). Warm rather than neutral because the
 guest side has to be appetising — a dining room at service, not a dashboard.
 
-| Token | Hex | Role |
-|---|---|---|
-| `--color-bg` | `#1E1815` | espresso — the room at service |
-| `--color-bg-raised` | `#2A2320` | cards, dockets |
-| `--color-fg` | `#F4EFE6` | enamel white, warm · 13.9:1 on bg |
-| `--color-fg-muted` | `#B3A79B` | 6.6:1 — safe for body |
-| `--color-fg-subtle` | `#8A7F73` | 4.1:1 — **large text only** |
-| `--color-accent` | `#3B8FD9` | food-safe blue · 5.6:1 on bg |
-| `--color-runway-low` | `#E0A33C` | amber |
-| `--color-runway-critical` | `#D9502F` | flame |
-| `--color-runway-out` | `#7D7266` | ash — drained, because it's gone |
+Contrast ratios below are **computed, not estimated** — every foreground is checked against
+both `--color-bg` and `--color-raised`, and all eight clear the 4.5:1 body threshold on both.
+
+| Token | Hex | on bg | on raised | Role |
+|---|---|---|---|---|
+| `--color-bg` | `#1E1815` | — | — | espresso — the room at service |
+| `--color-bg-raised` | `#2A2320` | — | — | cards, dockets |
+| `--color-fg` | `#F4EFE6` | 15.3:1 | 13.5:1 | enamel white, warm |
+| `--color-fg-muted` | `#B3A79B` | 7.5:1 | 6.6:1 | secondary text |
+| `--color-fg-subtle` | `#93897E` | 5.1:1 | 4.5:1 | eyebrows, captions |
+| `--color-accent` | `#3D90D9` | 5.2:1 | 4.6:1 | food-safe blue — the system's voice |
+| `--color-runway-plenty` | `#6FA98A` | 6.5:1 | 5.7:1 | sage — calm; shows no badge |
+| `--color-runway-low` | `#E0A33C` | 7.9:1 | 7.0:1 | amber |
+| `--color-runway-critical` | `#DE674A` | 5.1:1 | 4.5:1 | flame |
+| `--color-runway-out` | `#938A80` | 5.2:1 | 4.6:1 | ash — drained, because it's gone |
+
+**Three of those values were corrected after measuring them.** The first pass used a hotter
+flame (`#D9502F`), a darker ash (`#7D7266`) and a darker subtle grey (`#8A7F73`), all chosen by
+eye. Measured against `--color-bg-raised` — which is what a docket and a menu card actually sit
+on — they came in at **3.78:1, 3.29:1 and 3.94:1**: fine for large text, failing for the small
+labels they were being used on. Each was lightened by the smallest amount that clears 4.5:1 on
+both surfaces rather than by taste. Softening the flame costs little because urgency is carried
+redundantly anyway — weight, a glyph and a text label all say it too.
+
+The lesson worth keeping: contrast is computable, so compute it. Three of eight were wrong.
 
 **Typefaces.** `--font-display` **Bricolage Grotesque** — irregular, industrial-editorial, restrained
 to titles and runway numerals. `--font-body` **Newsreader** — real menus are set in serif; it signals

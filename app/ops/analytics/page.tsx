@@ -1,9 +1,134 @@
-import { Placeholder } from "@/components/ui/Placeholder";
+import { MenuMatrix, type MatrixDish } from "@/components/ops/MenuMatrix";
+import { Empty, OpsHeader, ScopeNote, StaffOnly } from "@/components/ops/ReadOnly";
+import { getAnalytics } from "@/lib/data/reports";
+import { formatCents } from "@/lib/money";
+import { getCurrentProfile } from "@/lib/supabase/server";
+import { isStaff } from "@/lib/auth/roles";
 
-export default function Page() {
+/*
+ * Service analytics.
+ *
+ * Deliberately NOT realtime. A matrix that reshuffles while you are reading it is
+ * worse, not better — this is a considered read at the end of service, not a monitor.
+ *
+ * The summary is stat tiles rather than charts: five single numbers are five numbers,
+ * and a one-bar bar chart is an anti-pattern. The one real chart earns its place
+ * because position genuinely carries the meaning.
+ */
+
+export const dynamic = "force-dynamic";
+
+const FOOD_COST_BAND = { low: 28, high: 32 };
+
+export default async function AnalyticsPage() {
+  const profile = await getCurrentProfile();
+  if (!isStaff(profile?.role)) return <StaffOnly what="service numbers" />;
+
+  const { summary, performance, windowDays, showCost, enoughData } = await getAnalytics();
+
+  const foodCost = summary.foodCostPct;
+  const foodCostTone =
+    foodCost === null
+      ? "normal"
+      : foodCost > FOOD_COST_BAND.high
+        ? "critical"
+        : foodCost < FOOD_COST_BAND.low
+          ? "normal"
+          : "warn";
+
+  const matrix: MatrixDish[] = performance
+    .filter((p) => p.unitsSold > 0)
+    .map((p) => ({
+      dishId: p.dishId,
+      name: p.name,
+      unitsSold: p.unitsSold,
+      popularity: p.popularity,
+      marginCents: p.marginCents,
+      foodCostCents: p.foodCostCents,
+      priceCents: p.priceCents,
+      menuClass: p.menuClass,
+    }));
+
   return (
-    <Placeholder title="Service" step="step 7">
-      Menu engineering matrix and service summary.
-    </Placeholder>
+    <div>
+      <OpsHeader
+        title="Service"
+        subtitle={`The last ${windowDays} days of trading. Everything here is computed from the order ledger — no figure is typed in.`}
+        stats={[
+          { label: "covers", value: String(summary.covers) },
+          { label: "revenue", value: formatCents(summary.revenueCents) },
+          { label: "per cover", value: formatCents(summary.perCoverCents) },
+          {
+            label: "median turn",
+            value: summary.avgTurnMinutes !== null ? `${summary.avgTurnMinutes}m` : "—",
+          },
+          ...(foodCost !== null
+            ? [
+                {
+                  label: "food cost",
+                  value: `${foodCost.toFixed(1)}%`,
+                  tone: foodCostTone as "normal" | "warn" | "critical",
+                },
+              ]
+            : []),
+        ]}
+      />
+
+      {foodCost !== null && (
+        <p
+          style={{
+            marginBottom: "var(--space-5)",
+            color: "var(--color-fg-muted)",
+            fontSize: "var(--text-step--1)",
+          }}
+        >
+          Food cost against the {FOOD_COST_BAND.low}–{FOOD_COST_BAND.high}% the industry typically
+          runs at:{" "}
+          <strong style={{ color: `var(--color-runway-${foodCostTone === "critical" ? "critical" : foodCostTone === "warn" ? "low" : "plenty"})` }}>
+            {foodCost > FOOD_COST_BAND.high
+              ? "above the band — plate costs are eating the margin"
+              : foodCost < FOOD_COST_BAND.low
+                ? "below the band — healthy"
+                : "inside the band"}
+          </strong>
+          .
+        </p>
+      )}
+
+      {!showCost && (
+        <ScopeNote>
+          Margin and food cost are hidden for your role, so the menu matrix isn&rsquo;t shown. A
+          manager or owner sees the full picture.
+        </ScopeNote>
+      )}
+
+      {!enoughData ? (
+        /* Honest degradation. A matrix drawn from a handful of orders is decoration
+           dressed as analysis, so it is not drawn at all. */
+        <Empty>
+          Not enough trading history yet — {summary.orders} paid orders in the last {windowDays}{" "}
+          days, and at least 30 are needed before a menu matrix says anything real. The figures
+          above are still accurate.
+        </Empty>
+      ) : !showCost || matrix.length === 0 ? null : (
+        <section>
+          <h2 style={{ fontSize: "var(--text-step-1)", marginBottom: "var(--space-2)" }}>
+            Which dishes earn their place
+          </h2>
+          <p
+            style={{
+              color: "var(--color-fg-muted)",
+              marginBottom: "var(--space-4)",
+              maxWidth: "72ch",
+            }}
+          >
+            How often each dish is ordered, against what it actually earns after ingredient cost.
+            The four quadrants are the standard Kasavana&ndash;Smith reading, and each one implies a
+            different action.
+          </p>
+          <MenuMatrix dishes={matrix} />
+        </section>
+      )}
+    </div>
   );
 }

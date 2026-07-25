@@ -31,29 +31,29 @@
   --color-bg-sunken: #151110;       /* wells, insets, the time track        */
 
   /* ── text ─ bone/enamel, warm so it sits with the ground ───────────────── */
-  --color-fg: #f4efe6;              /* 13.9:1 on bg                         */
-  --color-fg-muted: #b3a79b;        /* 6.6:1 — safe for body                */
-  --color-fg-subtle: #8a7f73;       /* 4.1:1 — LARGE TEXT ONLY              */
+  --color-fg: #f4efe6;              /* 15.3:1 on bg — computed, not guessed */
+  --color-fg-muted: #b3a79b;        /* 7.5:1 — safe for body                */
+  --color-fg-subtle: #93897e;       /* 4.5:1 on raised — body-safe          */
 
   --color-border: #382f29;
   --color-border-strong: #55483f;
 
   /* ── the system's voice ────────────────────────────────────────────────── */
-  --color-accent: #3b8fd9;          /* food-safe blue, 5.6:1 on bg          */
+  --color-accent: #3d90d9;          /* food-safe blue · 5.2:1 bg, 4.6 raised */
   --color-accent-fg: #06121d;
   --color-accent-dim: #1d4a72;
 
   /* ── status. NEVER the only encoding — always paired with glyph or label ── */
   --color-ok: #6fa98a;
   --color-warn: #e0a33c;
-  --color-danger: #d9502f;
-  --color-info: #3b8fd9;
+  --color-danger: #de674a;
+  --color-info: #3d90d9;
 
   /* ── runway bands: the product's own scale ─────────────────────────────── */
   --color-runway-plenty: #6fa98a;   /* sage — calm; plenty shows no badge   */
   --color-runway-low: #e0a33c;      /* amber                                */
-  --color-runway-critical: #d9502f; /* flame                                */
-  --color-runway-out: #7d7266;      /* ash — drained, because it's gone     */
+  --color-runway-critical: #de674a; /* flame                                */
+  --color-runway-out: #938a80;      /* ash — drained, because it's gone     */
 
   /* ── type ──────────────────────────────────────────────────────────────── */
   /* Display: irregular, industrial-editorial. Titles + runway numerals only. */

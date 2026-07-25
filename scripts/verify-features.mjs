@@ -89,7 +89,17 @@ async function app(path, { session, method = "GET", body } = {}) {
   const text = await res.text();
   let json = null;
   try { json = JSON.parse(text); } catch { /* an HTML page, which is fine */ }
-  return { status: res.status, text, json, location: res.headers.get("location") };
+  return {
+    status: res.status,
+    text,
+    json,
+    location: res.headers.get("location"),
+    // getSetCookie() keeps the headers separate; a joined string loses the boundaries
+    // between them, and sign-out sends several.
+    setCookie: typeof res.headers.getSetCookie === "function"
+      ? res.headers.getSetCookie()
+      : [res.headers.get("set-cookie")].filter(Boolean),
+  };
 }
 
 /**
@@ -119,6 +129,7 @@ async function signIn(email) {
   return {
     email, ok: true, status: res.status,
     accessToken: session.access_token,
+    refreshToken: session.refresh_token,
     userId: session.user?.id,
     cookie: cookieFor(session),
   };
@@ -766,6 +777,31 @@ async function main() {
       const board = await app("/ops/runway", { session: S.manager });
       ok("the board loads", board.status === 200, `HTTP ${board.status}`);
 
+      /*
+       * Is the restaurant OPEN right now, in its own zone?
+       *
+       * Four of the checks below only mean anything during service. A predicted 86 time
+       * comes from a sell rate, and the engine correctly refuses to invent one when the
+       * kitchen is shut — so asserting "there is a prediction" at 03:35 tests the clock,
+       * not the product. Left unguarded these failed overnight and passed in the evening on
+       * identical data, which is the exact flakiness I had just finished removing from
+       * verify:data. A check you learn to ignore is worse than no check.
+       */
+      const { body: rest } = await db(
+        `restaurants?select=service_hours,timezone&id=eq.${S.restaurant.id}`);
+      const zone = rest?.[0]?.timezone ?? "UTC";
+      const hours = rest?.[0]?.service_hours ?? {};
+      const parts = new Intl.DateTimeFormat("en-GB", {
+        timeZone: zone, hour12: false, weekday: "short", hour: "2-digit", minute: "2-digit",
+      }).formatToParts(new Date()).reduce((a, x) => (x.type !== "literal" ? { ...a, [x.type]: x.value } : a), {});
+      const dayKey = String(parts.weekday).toLowerCase().slice(0, 3);
+      const nowMin = (Number(parts.hour) % 24) * 60 + Number(parts.minute);
+      const toMin = (hhmm) => Number(hhmm.split(":")[0]) * 60 + Number(hhmm.split(":")[1]);
+      const todays = hours[dayKey] ?? [];
+      const serviceOpen = todays.some(([a, b]) => nowMin >= toMin(a) && nowMin < toMin(b));
+      const closes = todays.length ? todays[todays.length - 1][1] : null;
+      console.log(`      · ${parts.hour}:${parts.minute} ${zone} — service ${serviceOpen ? "OPEN" : "closed"}`);
+
       // Count what was DRAWN. Next embeds its own data payload in a <script>, so a
       // naive substring count sees dishes and phrases that never reached the screen.
       const dom = board.text.replace(/<script[\s\S]*?<\/script>/g, "");
@@ -773,8 +809,16 @@ async function main() {
       // so "86s ~<!-- -->21:44" is what actually reaches the browser.
       const times = [...dom.matchAll(/86s ~(?:<!--\s*-->)?(\d{2}):(\d{2})/g)];
       const count = (s) => dom.split(s).length - 1;
-      ok("it predicts clock times, not just counts", times.length > 0,
-        times.length ? `${times.length} predictions, first at ${times[0][1]}:${times[0][2]}` : "no prediction on the page");
+      if (serviceOpen) {
+        ok("it predicts clock times, not just counts", times.length > 0,
+          times.length ? `${times.length} predictions, first at ${times[0][1]}:${times[0][2]}` : "no prediction on the page");
+      } else {
+        // The positive form of the same rule: with the kitchen shut there must be NO
+        // clock time on the board. This is the check that would have caught the board
+        // hardcoding "enough for tonight" over the engine's refusal to predict.
+        ok("with the kitchen shut it predicts nothing, rather than guessing",
+          times.length === 0, `${times.length} predictions while closed`);
+      }
       // Nothing on the menu may be missing from the board, and no row may be silent:
       // each is either counting down, already 86'd, or explicitly fine. A blank row is
       // the failure that makes the whole board untrustworthy, and it reads as a choice.
@@ -784,36 +828,42 @@ async function main() {
       const thin = count("not enough history");
       const out = count(">86<") + count("no limit set");
       const expected = S.menu.filter((d) => !d.unlimited).length;
+      const onHand = count("no sell rate while closed");
       ok("every dish is on the board, and every row says where it stands",
-        atRisk + fine + thin + out >= expected,
+        atRisk + fine + thin + out + onHand >= expected,
         `${expected} dishes to account for → ${atRisk} counting down, ${out} already 86'd, ` +
-        `${fine} fine for tonight, ${thin} too little history`);
+        `${fine} fine for tonight, ${thin} too little history, ${onHand} portions-only (closed)`);
 
       // The ticks are a picture and a screen reader cannot read a picture, so each gauge
       // also carries the sentence in words. The two must AGREE: a spoken prediction where
       // the screen deliberately suppressed one is a lie told only to blind users, and
       // that is exactly the bug this comparison found.
       const spoken = (dom.match(/aria-label="\d+ portions? left, runs out about/g) ?? []).length;
-      ok("every gauge is written out for a screen reader", atRisk > 0 && atRisk === labelled,
+      // Gauges only exist where there is something to count down, so during service this
+      // asserts they are all labelled; outside it, that none shipped unlabelled.
+      ok("every gauge is written out for a screen reader",
+        atRisk === labelled && (serviceOpen ? atRisk > 0 : true),
         `${atRisk} gauges, ${labelled} labelled`);
       ok("and the spoken prediction says the same as the visible one",
         spoken === times.length, `${times.length} on screen, ${spoken} spoken`);
 
-      // A prediction outside opening hours is a bug that looks like a feature.
-      const { body: r } = await db(`restaurants?select=service_hours,timezone&id=eq.${S.restaurant.id}`);
-      const zone = r?.[0]?.timezone ?? "UTC";
-      const day = new Intl.DateTimeFormat("en-GB", { timeZone: zone, weekday: "short" })
-        .format(new Date()).toLowerCase().slice(0, 3);
-      const spans = (r?.[0]?.service_hours ?? {})[day] ?? [];
-      const closes = spans.length ? spans[spans.length - 1][1] : null;
-      const inside = times.length > 0 && closes
-        ? times.every(([, h, m]) => `${h}:${m}` <= closes)
-        : false;
-      ok("every prediction falls inside tonight's opening hours",
-        inside, closes ? `${zone}, closes ${closes}` : "no service hours for today");
+      // A prediction outside opening hours is a bug that looks like a feature. With no
+      // predictions on the page there is nothing to check, and "vacuously true" is the
+      // honest verdict rather than a failure.
+      const inside = times.length === 0
+        ? true
+        : Boolean(closes) && times.every(([, h, m]) => toMin(`${h}:${m}`) <= toMin(closes));
+      ok("every prediction falls inside tonight's opening hours", inside,
+        times.length === 0
+          ? "nothing predicted, so nothing to fall outside"
+          : `${times.length} checked · ${zone}, closes ${closes}`);
 
+      // The constraint ingredient is only named on a row that is counting down, so this
+      // is a during-service claim too.
       const named = S.ingredients.some((i) => dom.includes(i.name));
-      ok("it names the ingredient that is the constraint, so a chef can act on it", named);
+      ok("it names the ingredient that is the constraint, so a chef can act on it",
+        serviceOpen ? named : true,
+        serviceOpen ? "" : "not asserted while closed — no rows are counting down");
 
       const chefBoard = await app("/ops/runway", { session: S.grill });
       ok("the cooks can see it too", chefBoard.status === 200, `HTTP ${chefBoard.status}`);
@@ -924,6 +974,61 @@ async function main() {
       }
       ok("action buttons declare a busy state rather than just going grey",
         missing.length === 0, missing.length ? `no aria-busy on ${missing.join(", ")}` : busyWired.join(", "));
+
+      const dish = S.menu[0] ? await app(`/menu/${S.menu[0].id}`, { session: S.priya }) : { text: "" };
+      ok("and a dish page offers a way to add to it", /Add to order/i.test(dish.text));
+
+      ok("a signed-in diner sees their own name in the header",
+        menu.text.includes("Priya"), "first name only at 375px");
+      ok("…and a way to sign out", /action="\/auth\/sign-out"/.test(menu.text));
+
+      const strangerMenu = await app("/menu");
+      ok("a signed-out visitor is offered a way in instead",
+        /href="\/auth\/sign-in"/.test(strangerMenu.text) && !/action="\/auth\/sign-out"/.test(strangerMenu.text));
+
+      // The ops shell had no identity and no exit at all, so anyone signed in as the
+      // grill chef stayed the grill chef — with seven roles, being unable to see or
+      // change which one you are is the wrong first impression.
+      const kds = await app("/ops/kds", { session: S.grill });
+      ok("the kitchen screen says who is logged in, with their station",
+        kds.text.includes("Rahul") && /Chef de partie/.test(kds.text) && kds.text.includes("grill"),
+        "name, brigade role and station — it is a shared wall screen");
+      ok("…and offers a way out, so a role can be switched",
+        /action="\/auth\/sign-out"/.test(kds.text));
+
+      /*
+       * Sign-out, checked for what it can actually do.
+       *
+       * This check first asserted that the old access token stopped working, and failed —
+       * correctly. Supabase access tokens are stateless JWTs: signOut() revokes the REFRESH
+       * token, so no new access token can be minted, but a JWT already issued stays valid
+       * until it expires. Nothing server-side can recall it. My assertion described a
+       * session model this app does not have.
+       *
+       * What sign-out must do, and what is therefore checked: end the BROWSER session by
+       * clearing the auth cookie, and send the person somewhere. Long-lived-token exposure
+       * is a real trade-off of stateless JWTs, noted in docs/07-submission.md rather than
+       * asserted away here.
+       */
+      const throwaway = await signIn("mei@brigade.test");
+      const out = await app("/auth/sign-out", { session: throwaway, method: "POST" });
+      const cleared = out.setCookie.some(
+        (c) => /sb-.*-auth-token/.test(c) &&
+               (/(^|[;\s])(max-age=0|expires=Thu, 01 Jan 1970)/i.test(c) || /=;/.test(c)),
+      );
+      ok("signing out clears the session cookie and sends you away",
+        (out.status === 307 || out.status === 302) && cleared,
+        `HTTP ${out.status} → ${out.location ?? "?"}, ${out.setCookie.length} cookie header(s), auth cookie cleared: ${cleared}`);
+
+      // And the refresh token really is dead, which is the half that IS revocable: the
+      // old session can no longer mint a replacement access token.
+      const refresh = await fetch(`${SB}/auth/v1/token?grant_type=refresh_token`, {
+        method: "POST",
+        headers: { apikey: PUB, "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: throwaway.refreshToken }),
+      });
+      ok("…and the session cannot mint itself a new token afterwards",
+        refresh.status >= 400, `refresh → HTTP ${refresh.status}`);
     },
   });
 
@@ -956,36 +1061,6 @@ async function main() {
         /prefers-reduced-motion[\s\S]{0,300}\.skeleton[\s\S]{0,120}animation:\s*none/.test(css));
       void reduced;
 
-      const dish = S.menu[0] ? await app(`/menu/${S.menu[0].id}`, { session: S.priya }) : { text: "" };
-      ok("and a dish page offers a way to add to it", /Add to order/i.test(dish.text));
-
-      ok("a signed-in diner sees their own name in the header",
-        menu.text.includes("Priya"), "first name only at 375px");
-      ok("…and a way to sign out", /action="\/auth\/sign-out"/.test(menu.text));
-
-      const strangerMenu = await app("/menu");
-      ok("a signed-out visitor is offered a way in instead",
-        /href="\/auth\/sign-in"/.test(strangerMenu.text) && !/action="\/auth\/sign-out"/.test(strangerMenu.text));
-
-      // The ops shell had no identity and no exit at all, so anyone signed in as the
-      // grill chef stayed the grill chef — with seven roles, being unable to see or
-      // change which one you are is the wrong first impression.
-      const kds = await app("/ops/kds", { session: S.grill });
-      ok("the kitchen screen says who is logged in, with their station",
-        kds.text.includes("Rahul") && /Chef de partie/.test(kds.text) && kds.text.includes("grill"),
-        "name, brigade role and station — it is a shared wall screen");
-      ok("…and offers a way out, so a role can be switched",
-        /action="\/auth\/sign-out"/.test(kds.text));
-
-      // Prove sign-out actually ends the session, on a throwaway login so this test does
-      // not sign itself out of everything else it is doing.
-      const throwaway = await signIn("mei@brigade.test");
-      const out = await app("/auth/sign-out", { session: throwaway, method: "POST" });
-      const after = await as(throwaway, "profiles?select=id&limit=1");
-      ok("signing out really ends the session, not just the screen",
-        (out.status === 307 || out.status === 302 || out.status === 200) &&
-        (after.status === 401 || (Array.isArray(after.body) && after.body.length === 0)),
-        `POST → HTTP ${out.status}, then reading own profile → HTTP ${after.status}`);
     },
   });
 

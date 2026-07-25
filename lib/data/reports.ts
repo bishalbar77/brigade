@@ -38,7 +38,10 @@ const canSeeCost = (role: string | null | undefined) => role === "owner" || role
 const PAGE = 1000;
 
 type Rangeable<T> = {
-  range: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>;
+  range: (
+    from: number,
+    to: number,
+  ) => PromiseLike<{ data: T[] | null; error: unknown; count?: number | null }>;
 };
 
 /**
@@ -58,14 +61,41 @@ type Rangeable<T> = {
  * once and cannot be re-awaited with a different range.
  */
 async function pageAll<T>(build: () => Rangeable<T>): Promise<T[]> {
-  const rows: T[] = [];
-  for (let offset = 0; ; offset += PAGE) {
+  // First page also asks for the total, so the rest can be fetched at once.
+  const first = await build().range(0, PAGE - 1);
+  if (first.error || !first.data) return [];
+  const rows: T[] = [...first.data];
+  if (first.data.length < PAGE) return rows;
+
+  const total = first.count ?? null;
+
+  /*
+   * Everything after page one, CONCURRENTLY.
+   *
+   * The sequential version of this loop cost /ops/analytics twelve seconds. Each Supabase
+   * round trip from Vercel is roughly a second and a half, and 3411 order items plus 1350
+   * orders is six pages — so paging correctly (which fixed the 5.9% food cost) traded one
+   * wrong number for a screen nobody would wait for. Both were bugs; this is the version
+   * that is neither.
+   *
+   * Needs the total, which is why the callers pass `{ count: "exact" }`. Without it there
+   * is no way to know how many pages exist without asking for them one at a time, so the
+   * fallback below stays sequential rather than guessing.
+   */
+  if (total !== null) {
+    const pages = [];
+    for (let offset = PAGE; offset < total; offset += PAGE) pages.push(offset);
+    if (pages.length > 100) pages.length = 100; // backstop, ~100k rows
+    const rest = await Promise.all(pages.map((o) => build().range(o, o + PAGE - 1)));
+    for (const r of rest) if (!r.error && r.data) rows.push(...r.data);
+    return rows;
+  }
+
+  for (let offset = PAGE; ; offset += PAGE) {
     const { data, error } = await build().range(offset, offset + PAGE - 1);
     if (error || !data) break;
     rows.push(...data);
-    // A short page is the last page. Equal-to-PAGE is ambiguous, so we ask again.
     if (data.length < PAGE) break;
-    // Backstop: a demo dataset that reaches this has a different problem.
     if (rows.length >= 100_000) break;
   }
   return rows;
@@ -563,14 +593,16 @@ export async function getAnalytics(windowDays = 28, now: Date = new Date()): Pro
     }>(() =>
       supabase
         .from("orders")
-        .select("id, opened_at, closed_at, total_cents, subtotal_cents, status, tables ( seats )")
+        .select("id, opened_at, closed_at, total_cents, subtotal_cents, status, tables ( seats )",
+          { count: "exact" })
         .gte("opened_at", from.toISOString())
         .order("opened_at"),
     ),
     pageAll<{ dish_id: string; qty: number; unit_price_cents: number; status: string }>(() =>
       supabase
         .from("order_items")
-        .select("dish_id, qty, unit_price_cents, status, orders!inner ( opened_at )")
+        .select("dish_id, qty, unit_price_cents, status, orders!inner ( opened_at )",
+          { count: "exact" })
         .gte("orders.opened_at", from.toISOString())
         .neq("status", "voided")
         .order("dish_id"),

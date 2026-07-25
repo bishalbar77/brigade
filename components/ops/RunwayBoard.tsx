@@ -83,7 +83,9 @@ export function RunwayBoard({
             color: "var(--color-fg-muted)",
           }}
         >
-          Nothing is close. Every dish on the menu lasts the night.
+          {serviceOpen
+            ? "Nothing is close. Every dish on the menu lasts the night."
+            : "Nothing is counting down, because nothing is selling. These are portions on hand; the predictions come back when service opens."}
         </p>
       ) : (
         <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "var(--space-3)" }}>
@@ -97,9 +99,26 @@ export function RunwayBoard({
         </ul>
       )}
 
-      <Group title="Comfortable" count={comfortable.length}>
+      {/*
+       * The label has to depend on whether service is running, and it did not.
+       * "enough for tonight" was hardcoded, so at 03:30 — kitchen shut, no sell rate to
+       * predict from — the board declared all 28 dishes good for the night, four portions
+       * of prawns included. Two lines above, its own header correctly read "service
+       * closed · portions only". A screen that contradicts itself in one viewport is
+       * worse than one that says nothing, and the engine was never the problem: it
+       * returns no prediction when closed, and this component overrode that with a
+       * cheerful string.
+       */}
+      <Group
+        title={serviceOpen ? "Comfortable" : "Portions on hand"}
+        count={comfortable.length}
+      >
         {comfortable.map((r) => (
-          <QuietRow key={r.dishId} row={r} detail="enough for tonight" />
+          <QuietRow
+            key={r.dishId}
+            row={r}
+            detail={serviceOpen ? "enough for tonight" : "no sell rate while closed"}
+          />
         ))}
       </Group>
 

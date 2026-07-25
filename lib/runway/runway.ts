@@ -1,5 +1,11 @@
 import { bindingIngredient, isManually86, isUnlimited, portionsAvailable } from "./availability";
-import { type DaypartWindow, currentDaypart, resolveVelocity } from "./velocity";
+import {
+  type DaypartWindow,
+  currentDaypart,
+  minutesFromMidnight,
+  resolveVelocity,
+  serviceEndMinutes,
+} from "./velocity";
 import {
   BAND_THRESHOLDS,
   type Dish,
@@ -98,6 +104,14 @@ export function runwayFromPortions(input: PortionsRunwayInput): RunwayResult {
   const minutes =
     serviceOpen && !insufficientHistory ? runwayMinutes(portions, unitsPerHour) : null;
 
+  // Does it outlast the night? A prediction past closing is arithmetically correct
+  // and useless: nobody needs telling the croquettes would run out at 02:19.
+  const endMinutes = serviceEndMinutes(serviceWindows);
+  const lastsThroughService =
+    minutes !== null && endMinutes !== null
+      ? minutesFromMidnight(now) + minutes > endMinutes
+      : false;
+
   return {
     dishId,
     portions: unlimited && !manually86 ? rawPortions : portions,
@@ -106,6 +120,7 @@ export function runwayFromPortions(input: PortionsRunwayInput): RunwayResult {
     band: bandFor(portions, minutes),
     unlimited: unlimited && !manually86,
     insufficientHistory: insufficientHistory && serviceOpen,
+    lastsThroughService,
     bindingIngredientId,
   };
 }

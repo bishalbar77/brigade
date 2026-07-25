@@ -283,6 +283,32 @@ describe("computeRunway", () => {
     expect(r.portions).toBe(4);
   });
 
+  it("flags a dish that outlasts service instead of predicting past closing", () => {
+    // 70 portions at ~2/hr is 35 hours. Reporting "86s ~02:19" is arithmetically
+    // correct and useless — the kitchen shuts at 22:30.
+    const r = computeRunway({
+      ...base,
+      stockByIngredient: new Map([["bass", 70], ["lemon", 500]]),
+      velocity: computeVelocity([2, 2, 2, 2]),
+      dish: dish(),
+      now: at(19, 0),
+    });
+    expect(r.runwayMinutes).toBeGreaterThan(120);
+    expect(r.lastsThroughService).toBe(true);
+  });
+
+  it("does not flag lastsThroughService when the dish runs out during service", () => {
+    const r = computeRunway({ ...base, dish: dish(), now: at(19, 0) });
+    expect(r.runwayMinutes).toBeCloseTo(40, 5); // 86s at 19:40, before 22:30
+    expect(r.lastsThroughService).toBe(false);
+  });
+
+  it("cannot last through a service that has no prediction", () => {
+    const r = computeRunway({ ...base, dish: dish(), now: at(4, 0) }); // closed
+    expect(r.runwayMinutes).toBeNull();
+    expect(r.lastsThroughService).toBe(false);
+  });
+
   it("gives a high-velocity dish a shorter runway than a low-velocity one at equal stock", () => {
     const fast = computeRunway({ ...base, velocity: computeVelocity([12, 12, 12, 12]), dish: dish(), now: at(19) });
     const slow = computeRunway({ ...base, velocity: computeVelocity([2, 2, 2, 2]), dish: dish(), now: at(19) });
@@ -299,7 +325,8 @@ describe("byUrgency", () => {
   ): RunwayResult => ({
     dishId, portions, runwayMinutes: minutes, predicted86At: null,
     band: bandFor(portions, minutes), unlimited: false,
-    insufficientHistory: false, bindingIngredientId: null, ...over,
+    insufficientHistory: false, lastsThroughService: false,
+    bindingIngredientId: null, ...over,
   });
 
   it("puts already-86'd dishes first", () => {
@@ -460,7 +487,8 @@ describe("normalise", () => {
 describe("scoreForSteering", () => {
   const runway = (band: RunwayResult["band"], minutes: number | null): RunwayResult => ({
     dishId: "x", portions: 10, runwayMinutes: minutes, predicted86At: null,
-    band, unlimited: false, insufficientHistory: false, bindingIngredientId: null,
+    band, unlimited: false, insufficientHistory: false, lastsThroughService: false,
+    bindingIngredientId: null,
   });
 
   it("demotes a critical dish below an equivalent plenty dish", () => {

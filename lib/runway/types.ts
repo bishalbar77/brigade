@@ -52,6 +52,15 @@ export interface RunwayResult {
   unlimited: boolean;
   /** true when we lack the history to predict. UI must say so rather than guess. */
   insufficientHistory: boolean;
+  /**
+   * The dish outlasts tonight's service.
+   *
+   * Without this the UI renders a mathematically-correct but absurd clock time —
+   * "86s ~02:19" for a dish with 70 portions, hours after the kitchen shut. The
+   * honest statement is "enough for tonight", and only the engine knows when
+   * service ends.
+   */
+  lastsThroughService: boolean;
   bindingIngredientId: string | null;
 }
 

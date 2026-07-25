@@ -251,6 +251,22 @@
   transition: width var(--dur-slow) var(--ease-out-brigade);
 }
 
+/*
+ * A count that just changed over realtime.
+ *
+ * This is the demo moment: another table ordered, and this number moved on its
+ * own. A silent change reads as a static page. It fires ONCE and rests — the
+ * animation announces the change, it does not decorate the card.
+ */
+[data-flash] {
+  animation: flash-change var(--dur-slow) var(--ease-out-brigade) both;
+}
+
+@keyframes flash-change {
+  0%   { border-color: var(--color-accent); background: color-mix(in oklab, var(--color-bg-raised) 82%, var(--color-accent)); }
+  100% { border-color: var(--color-border); background: var(--color-bg-raised); }
+}
+
 /* Nothing in this app requires motion to be understood. Under reduced motion
    the gauge still UPDATES — it just stops animating. */
 @media (prefers-reduced-motion: reduce) {

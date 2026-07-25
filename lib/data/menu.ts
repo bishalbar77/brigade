@@ -1,4 +1,5 @@
 import { byUrgency, runwayFromPortions } from "@/lib/runway/runway";
+import { scoreForSteering } from "@/lib/runway/steering";
 import type { RunwayResult, Velocity } from "@/lib/runway/types";
 import { currentDaypart, type DaypartWindow } from "@/lib/runway/velocity";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -29,6 +30,9 @@ export interface MenuDish {
   tags: string[];
   allergens: string[];
   sort: number;
+  /** Carried through rather than inferred from band: "off because the sauce broke"
+      and "off because stock ran out" need different actions. */
+  manually86: boolean;
   runway: RunwayResult;
 }
 
@@ -46,6 +50,13 @@ export interface MenuPayload {
   categories: MenuCategory[];
   serviceOpen: boolean;
   daypart: string | null;
+  /**
+   * Passed to the client so it can recompute runway with the SAME engine when a
+   * portion count changes over realtime, rather than reimplementing the rules or
+   * round-tripping to the server for the maths.
+   */
+  velocityByDish: Record<string, Velocity>;
+  serviceWindows: DaypartWindow[];
 }
 
 interface ServiceHours {
@@ -141,6 +152,7 @@ export async function getMenuWithRunway(now: Date = new Date()): Promise<MenuPay
     tags: (row.tags as string[]) ?? [],
     allergens: (row.allergens as string[]) ?? [],
     sort: (row.sort as number) ?? 0,
+    manually86: Boolean(row.manually_86),
     runway: runwayFromPortions({
       dishId: row.id as string,
       portions: row.portions as number,
@@ -161,5 +173,45 @@ export async function getMenuWithRunway(now: Date = new Date()): Promise<MenuPay
     categories: (cats ?? []) as MenuCategory[],
     serviceOpen,
     daypart: serviceOpen ? daypart : null,
+    velocityByDish: Object.fromEntries(velocityByDish),
+    serviceWindows: windows,
   };
+}
+
+/**
+ * Ordering for the guest browse rail.
+ *
+ * NOTE ON A DELIBERATE DEVIATION FROM docs/05-runway-engine.md §6.
+ * The full steer_score weights margin at 0.30 — but margin needs
+ * `cost_per_unit_cents`, and a guest legitimately cannot read that (it is the one
+ * thing `menu_public` exists to keep out of guest payloads). Three options:
+ *
+ *   1. Reimplement steer_score in SQL inside the view, exposing only the rank.
+ *      Rejected for the same reason as the runway maths: a second, untested
+ *      implementation that will drift.
+ *   2. Use a privileged client in app code to read cost. Rejected outright —
+ *      ADR-3 puts authorization in the database, and the service role key never
+ *      appears in app code.
+ *   3. Drop the margin term on the guest path only.
+ *
+ * Chose 3. `scoreForSteering` is passed marginCents: 0 for every dish, which makes
+ * `normalise` return a constant 0.5 for all of them — so the margin term cancels
+ * out and ordering falls to runway, scarcity and affinity. That is the entire
+ * guest-VISIBLE behaviour: near-86 dishes sink and get badged. The margin lever is
+ * a manager concern and surfaces on the ops side, where cost is legitimately
+ * readable. No SQL twin, no leaked cost, and the tested function is reused as-is.
+ */
+export function orderForGuest(dishes: readonly MenuDish[]): MenuDish[] {
+  const scored = scoreForSteering(
+    dishes.map((d) => ({
+      dishId: d.id,
+      marginCents: 0,
+      runway: d.runway,
+      affinity: 0,
+    })),
+  );
+  const rank = new Map(scored.map((s, i) => [s.dishId, i]));
+  return [...dishes].sort(
+    (a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0),
+  );
 }

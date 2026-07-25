@@ -423,10 +423,27 @@ async function main(): Promise<void> {
 
   // Dishes we want visibly near-86 on camera. The runway board needs something
   // to count down on, and the demo script depends on it (docs/07-submission.md).
+  /*
+   * Dishes deliberately left near-86, so the runway board has something to count
+   * down and the demo has something to point at.
+   *
+   * Exactly ONE ingredient per dish is set to the target. Everything else in that
+   * recipe must stay comfortably above it.
+   *
+   * This matters more than it looks. `portions = min(over ingredients)`, so if two
+   * ingredients tie at the binding count, topping up either one moves nothing —
+   * the other still caps the dish. That is `min()` behaving correctly, but on a
+   * demo it reads as a broken write path: a manager adds stock and the number sits
+   * there. It also makes `dish_binding_ingredient` arbitrary between the tied rows,
+   * which undermines the "because you have 3 scallops" line that makes the runway
+   * board actionable.
+   */
   const NEAR_86: Record<string, number> = {
-    "Sea bass fillet": 4,     // → Sea bass main shows "4 left"
+    "Sea bass fillet": 4,     // → Sea bass main shows "4 left", bass binds alone
     "King scallops": 9,       // → Scallops starter shows "3 left" (3 per portion)
-    "Wild garlic": 0.06,      // → binds the scallops too, short shelf life
+    // Wild garlic deliberately NOT pinned: it used to be set to 0.06, which also
+    // yielded exactly 3 portions and tied with the scallops. Left to the normal
+    // par-level fill so King scallops is the unambiguous constraint.
   };
 
   for (const ing of INGREDIENTS) {

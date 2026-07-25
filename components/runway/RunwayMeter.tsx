@@ -73,9 +73,25 @@ export function RunwayMeter({
   unitsPerHour,
   className = "",
 }: RunwayMeterProps) {
-  const { portions, band, runwayMinutes, predicted86At, unlimited, insufficientHistory } = runway;
+  const {
+    portions,
+    band,
+    runwayMinutes,
+    predicted86At,
+    unlimited,
+    insufficientHistory,
+    lastsThroughService,
+  } = runway;
   const color = BAND_COLOR[band];
   const glyph = BAND_GLYPH[band];
+
+  /*
+   * An unremarkable dish gets NO badge on a guest surface. Nothing is at stake, so
+   * saying "70 left" is noise that dilutes the badges that do matter. Ops surfaces
+   * pass detail and still see every row, because a manager is scanning the whole
+   * menu rather than choosing one dish.
+   */
+  if (band === "plenty" && !detail) return null;
 
   // An unlimited dish has no bill of materials entered yet. It is NOT scarce and
   // must never render as a countdown — a half-configured menu should not read as
@@ -168,6 +184,10 @@ export function RunwayMeter({
             board predicting an 86 at 04:00 destroys trust in every other number. */}
         {insufficientHistory ? (
           <span style={{ color: "var(--color-fg-subtle)" }}>not enough history</span>
+        ) : lastsThroughService ? (
+          /* Correct arithmetic, useless statement: nobody needs telling the
+             croquettes would run out at 02:19 if service carried on. */
+          <span style={{ color: "var(--color-fg-muted)" }}>enough for tonight</span>
         ) : predicted86At ? (
           <span style={{ color: "var(--color-fg-muted)" }}>86s ~{clockOf(predicted86At)}</span>
         ) : (

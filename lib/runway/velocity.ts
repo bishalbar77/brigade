@@ -88,3 +88,15 @@ export function currentDaypart(date: Date, windows: readonly DaypartWindow[]): D
 export function isServiceOpen(date: Date, windows: readonly DaypartWindow[]): boolean {
   return currentDaypart(date, windows) !== null;
 }
+
+/**
+ * Minutes-from-midnight at which tonight's service ends, or null when closed all day.
+ *
+ * Used to decide whether a dish outlasts the night. A prediction beyond closing is
+ * arithmetically correct and useless — nobody needs to be told the croquettes would
+ * run out at 02:19 if service continued, because it won't.
+ */
+export function serviceEndMinutes(windows: readonly DaypartWindow[]): number | null {
+  if (windows.length === 0) return null;
+  return Math.max(...windows.map((w) => w.endMinutes));
+}

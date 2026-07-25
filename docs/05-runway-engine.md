@@ -129,7 +129,7 @@ initial weights: w₁ 0.30, w₂ 0.25, w₃ 0.30, w₄ 0.15
 
 - Dishes about to 86 sink out of the primary rail and gain a scarcity badge. **They remain fully
   orderable** — this is ranking, not hiding. Hiding an available dish would be a lie, and a guest who
-  came for the branzino must still be able to find it.
+  came for the prawns must still be able to find them.
 - High-margin dishes with long runway rise, which is the revenue lever.
 - All weights live in one config object so the behaviour is inspectable and tunable.
 

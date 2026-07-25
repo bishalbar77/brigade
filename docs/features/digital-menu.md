@@ -25,7 +25,7 @@ No account needed to browse. Ordering requires being signed in and verified.
 
 Dishes are ordered by `steer_score` (see [../05-runway-engine.md](../05-runway-engine.md)), so
 near-86 dishes sink in the browse rail and high-margin, long-runway dishes rise. **Near-86 dishes stay
-fully orderable** — this is ranking, not hiding. A guest who came for the branzino must still find it.
+fully orderable** — this is ranking, not hiding. A guest who came for the prawns must still find them.
 
 Availability changes **live**, without a reload. Someone at another table ordering the last portion
 updates this screen.

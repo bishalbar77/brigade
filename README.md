@@ -81,7 +81,7 @@ Two gaps remain in what's actually shipped:
    POS button. The guest at the table still has to ask, and the server still walks to
    the kitchen. The number never reaches the person choosing what to order.
 2. **Everything is reactive.** Existing systems report an item is out *after* stock
-   hits zero. Nothing tells the kitchen at 18:00 "you'll 86 the sea bass at 19:25, you
+   hits zero. Nothing tells the kitchen at 18:00 "you'll 86 the tandoori prawns at 19:25, you
    have 4 portions left" — and nothing uses that prediction to steer demand while there
    is still time to act.
 

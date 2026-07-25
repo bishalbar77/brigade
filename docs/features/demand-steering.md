@@ -58,7 +58,7 @@ badge appears without a reload.
 ## Rules & edge cases
 
 - **Ranking, never hiding.** A near-86 dish sinks and gets badged but stays fully orderable. Hiding an
-  available dish would be a lie, and a guest who came for the branzino must still be able to find it.
+  available dish would be a lie, and a guest who came for the prawns must still be able to find them.
   This is the line between steering and manipulation, and it's worth being explicit about.
 - **Allergen filtering is a hard exclusion**, never a ranking penalty. Ranking down an allergen is a
   safety bug, not a tuning choice.

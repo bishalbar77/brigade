@@ -14,6 +14,7 @@
  *   5. no cost/margin field reachable with the publishable key
  *   6. the runway engine produces sane predictions on real data
  */
+import { resolveTimeZone, zonedParts } from "../lib/runway/clock";
 import { computeRunway } from "../lib/runway/runway";
 import type { Dish, Velocity } from "../lib/runway/types";
 import type { DaypartWindow } from "../lib/runway/velocity";
@@ -45,8 +46,8 @@ async function q<T>(path: string, key: string): Promise<T[]> {
 
 const DAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 
-function windowsFor(date: Date): DaypartWindow[] {
-  const key = DAYS[date.getDay()]!;
+function windowsFor(date: Date, timeZone: string): DaypartWindow[] {
+  const key = DAYS[zonedParts(date, timeZone).weekday]!;
   const spans = (SERVICE_HOURS as Record<string, string[][]>)[key] ?? [];
   return spans.map((span, i) => {
     const toMin = (hhmm: string) => {
@@ -130,9 +131,20 @@ async function main() {
     recipeByDish.set(r.dish_id, list);
   }
 
-  const windows = windowsFor(now);
-  const weekday = now.getDay();
-  const daypart = now.getHours() < 16 ? "lunch" : "dinner";
+  // In the RESTAURANT's zone, not this laptop's. Reading the weekday and the hour off the
+  // local clock made this script disagree with the product it was checking: run from a
+  // London machine against a Kolkata restaurant it loaded the wrong day's sell rates and
+  // called an open service closed. Same bug class as the one fixed in the engine itself.
+  const restaurants = await q<{ timezone: string | null }>(
+    "restaurants?select=timezone&limit=1", secret!);
+  const timeZone = resolveTimeZone(restaurants[0]?.timezone);
+  const here = zonedParts(now, timeZone);
+  const windows = windowsFor(now, timeZone);
+  const weekday = here.weekday;
+  const daypart = here.minutes < 16 * 60 ? "lunch" : "dinner";
+  const serviceOpen = windows.some(
+    (w) => here.minutes >= w.startMinutes && here.minutes < w.endMinutes,
+  );
   const velByDish = new Map<string, Velocity>();
   for (const v of velocity) {
     if (v.weekday === weekday && v.daypart === daypart) {
@@ -158,7 +170,8 @@ async function main() {
   const open = windows.length > 0 && results.some((x) => x.r.runwayMinutes !== null);
   console.log(`  service windows today (${DAYS[weekday]}): ` +
     (windows.length ? windows.map((w) => w.name).join(", ") : "closed") +
-    ` · now ${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")} · daypart ${daypart}`);
+    ` · now ${here.hhmm} ${timeZone} · daypart ${daypart} · ` +
+    (serviceOpen ? "OPEN" : "closed right now"));
 
   const urgent = results
     .filter((x) => x.r.band === "critical" || x.r.band === "out" || x.r.band === "low")
@@ -173,7 +186,28 @@ async function main() {
       (r.bindingIngredientId ? `  ← ${ingName.get(r.bindingIngredientId)}` : ""));
   }
 
-  check(urgent.length > 0, "engine identifies at-risk dishes", `${urgent.length} in low/critical/out`);
+  /*
+   * Split in two, because the single check this replaces was quietly time-dependent: it
+   * asserted the engine finds "at-risk" dishes, and a dish is only banded low or critical
+   * from a PREDICTION, which the engine correctly refuses to make outside service hours.
+   * So the same database passed at 20:00 and failed at 03:00, and the failure said
+   * "engine identifies at-risk dishes: 0" as though the engine were broken.
+   *
+   * A check that depends on when you run it is worse than no check, because you learn to
+   * ignore it. So: scarcity is asserted always (it is a fact about the pantry), and the
+   * banding is asserted only while service is open, where a band is meaningful.
+   */
+  const scarceByEngine = results.filter((x) => !x.r.unlimited && x.r.portions <= 12);
+  check(scarceByEngine.length > 0, "the pantry has genuinely scarce dishes",
+    `${scarceByEngine.length} at 12 portions or fewer — the board has something to count down`);
+
+  if (serviceOpen) {
+    check(urgent.length > 0, "engine bands them low/critical while service is open",
+      `${urgent.length} banded`);
+  } else {
+    console.log("  ─ banding not asserted: service is closed, so predictions are " +
+      "correctly suppressed and every band falls back to portions");
+  }
   check(results.every((x) => !x.r.unlimited || x.r.runwayMinutes === null),
     "unlimited dishes never get a finite runway");
   check(results.every((x) => x.r.portions >= 0), "no negative portions");

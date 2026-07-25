@@ -33,7 +33,7 @@ Two gaps remain in what's actually shipped:
 | Gap | Detail |
 |---|---|
 | **1. Availability is staff-facing only** | Toast computes the number and shows a `0` on the POS button and the KDS. The guest at the table still has to ask, and the server still walks to the kitchen to check. The number never reaches the person deciding what to order. |
-| **2. Everything is reactive** | Existing systems report an item is out *after* stock hits zero. Nothing tells the kitchen at 18:00 "you'll 86 the branzino at 20:40, you have 4 left" — and nothing uses that prediction to steer demand away while there's still time to act. |
+| **2. Everything is reactive** | Existing systems report an item is out *after* stock hits zero. Nothing tells the kitchen at 18:00 "you'll 86 the tandoori prawns at 20:40, you have 4 left" — and nothing uses that prediction to steer demand away while there's still time to act. |
 
 ### What that reactivity costs
 
@@ -77,7 +77,7 @@ One number, four surfaces:
 | Surface | What runway does |
 |---|---|
 | **Guest menu** | Shows "6 left." Near-86 dishes sink in the browse rail and gain a scarcity badge |
-| **Kitchen** | The 86 board becomes a **countdown**, not an obituary: "branzino 86s ~20:40 · 4 portions" |
+| **Kitchen** | The 86 board becomes a **countdown**, not an obituary: "tandoori prawns 86s ~20:40 · 4 portions" |
 | **Manager** | Reorder quantities and prep lists fall out of the same velocity model |
 | **Revenue** | Demand steering favours high-margin dishes with long runway — the constraint becomes a lever |
 
@@ -304,7 +304,7 @@ This orders the guest browse rail. Dishes about to run out sink and gain a scarc
 dishes the kitchen can comfortably deliver rise.
 
 **Critically: this is ranking, not hiding.** A near-86 dish stays fully orderable and findable. Hiding an
-available dish would be a lie, and a guest who came for the branzino must still be able to order it.
+available dish would be a lie, and a guest who came for the prawns must still be able to order them.
 That line — between steering and manipulation — is one we've drawn deliberately.
 
 ---

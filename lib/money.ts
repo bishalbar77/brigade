@@ -1,11 +1,33 @@
 /**
- * Money is integer cents. Everywhere. No floats.
+ * Money is integer minor units. Everywhere. No floats.
  *
- * `0.1 + 0.2 !== 0.3` is exactly the class of bug that must never appear on a bill.
+ * `0.1 + 0.2 !== 0.3` is exactly the class of bug that must never appear on a bill. The
+ * field names still say `cents` because that is what the columns are called; for this
+ * restaurant the minor unit is the PAISE. ₹480 is 48000.
  */
 
-export function formatCents(cents: number, currency = "GBP", locale = "en-GB"): string {
-  return new Intl.NumberFormat(locale, { style: "currency", currency }).format(cents / 100);
+/**
+ * Rupees by default, and `en-IN` on purpose — it groups in lakhs (₹1,23,456), which is
+ * how the number is read here and one of those details that is wrong in every generic
+ * dashboard.
+ *
+ * Trailing paise are dropped when there are none, because an Indian menu prices in whole
+ * rupees and "₹480.00" reads like a currency converter. A bill still shows them: 5% GST
+ * on ₹480 is ₹24.00, but on ₹185 it is ₹9.25, and rounding that away on the one screen
+ * where the arithmetic must add up would be the wrong kind of tidy.
+ *
+ * The currency and locale stay parameters rather than constants: `restaurants.currency`
+ * is a real column, and a second tenant billing in another currency should not need this
+ * file edited.
+ */
+export function formatCents(cents: number, currency = "INR", locale = "en-IN"): string {
+  const whole = cents % 100 === 0;
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency,
+    minimumFractionDigits: whole ? 0 : 2,
+    maximumFractionDigits: whole ? 0 : 2,
+  }).format(cents / 100);
 }
 
 /**

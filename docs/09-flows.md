@@ -106,7 +106,7 @@ language throughout.
 
 | She tries | What happens | Why |
 |---|---|---|
-| Order more than exists | 409, "Only 3 Sea bass left." | Named the dish and the real number, so there is something to do next |
+| Order more than exists | 409, "Only 3 Tandoori prawns left." | Named the dish and the real number, so there is something to do next |
 | Order the last portion at the same instant as another diner | Exactly one succeeds; the other is told it just went | Two guests must not both be sold the last one |
 | Order without an account | 401, "Sign in to place an order." | An order is a commitment; it needs a name on it |
 | Order before verifying her email | 403 | Enforced in `place_order()`, not just in the UI |
@@ -421,7 +421,7 @@ Each row carries:
   so six steaks and one lemon is one steak dish;
 - **when it will 86**, from that dish's own sell rate for this weekday and this daypart
   (EWMA over the last six comparable slots);
-- **which ingredient is the constraint** — "branzino 86s at 20:40" is information;
+- **which ingredient is the constraint** — "tandoori prawns 86s at 20:40" is information;
   "because you have four lemons" is something a chef can act on in five minutes;
 - for a manager, a **top-up button**, so the fix is where the problem is visible.
 
@@ -431,7 +431,7 @@ things and never a blank:
 | It says | When |
 |---|---|
 | `86s ~20:40` | It will run out during service |
-| `enough for tonight` | Correct arithmetic, useless statement — nobody needs telling the croquettes would run out at 02:19 if service carried on |
+| `enough for tonight` | Correct arithmetic, useless statement — nobody needs telling the jeera rice would run out at 02:19 if service carried on |
 | `not enough history` | Fewer than 3 comparable samples. A guess dressed as a prediction poisons trust in every other number on the screen |
 | `closed` | Outside service hours, where velocity means nothing |
 

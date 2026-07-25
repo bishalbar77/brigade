@@ -39,7 +39,7 @@ genuinely recognise; guest-facing copy uses plain language instead.
 
 | Term | Meaning |
 |---|---|
-| **86** | To mark a dish unavailable. "We're 86 the branzino." Used as verb and adjective. |
+| **86** | To mark a dish unavailable. "We're 86 the prawns." Used as verb and adjective. |
 | **runway** | Brigade's own term: minutes until a dish 86s at current sell rate. The core metric. |
 | **the pass** | The counter where the kitchen hands finished plates to the floor. |
 | **expo** | Expediter — the person at the pass coordinating plates out to tables. |

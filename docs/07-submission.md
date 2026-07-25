@@ -202,7 +202,7 @@ was *tested*, not that nothing was there. Each was reproduced by hand instead. A
 | Recipe quantities are not readable outside the kitchen | `recipe_items_read` was `is_staff()` with no tenant filter: every restaurant's staff could read every other's BOM | patch 006 |
 | Analytics is the intelligence layer | **Food cost printed 5.9%**, directly above the line naming the 28–32% band it compares to. PostgREST caps responses at 1000 rows and a client `.limit(20000)` cannot raise it — 1000 of 3411 order items, HTTP 200, no error. The twenty dish counts summing to exactly 1000 was the tell. Now 22.4%, which matches an independent recomputation | paging in `reports.ts` |
 | — | Voiding an order's **last** item left the bill at full price, because the recompute joined a `GROUP BY` subquery that returns no rows when nothing survives. `pay_order()` would settle it | patch 006 |
-| — | The pantry's "used/day" applied one daypart's rate across a hardcoded 11-hour day: scallops overstated 18%, red wine understated 10% — under a printed formula that made it look exact | summed per service window |
+| — | The pantry's "used/day" applied one daypart's rate across a hardcoded 11-hour day: prawn usage overstated 18%, chai understated 10% — under a printed formula that made it look exact | summed per service window |
 | — | **Nothing in the app linked to `/cart`.** "Add to order" put a dish somewhere the diner could only reach by typing the URL. Neither shell showed who you were signed in as, and ops had no sign-out at all | cart link + `AccountBar` |
 
 Two of those are worth stating plainly because they indict the process, not the code:

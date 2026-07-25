@@ -228,8 +228,17 @@ async function main(): Promise<void> {
   const { data: restaurant, error: rErr } = await db
     .from("restaurants")
     .insert({
-      name: "Brigade", slug: RESTAURANT_SLUG, timezone: "Europe/London",
-      currency: "GBP", tax_rate: 0.08, service_hours: SERVICE_HOURS, covers: 60,
+      // tax_rate is 5% because that is GST on restaurant service in India (the 5%,
+      // no-input-tax-credit rate), not a round number picked to look plausible. It is
+      // stored per restaurant precisely so it is a fact about the tenant rather than a
+      // constant in the code.
+      //
+      // Asia/Kolkata is load-bearing, not cosmetic: every runway prediction, every
+      // service window and the whole lunch/dinner velocity split are resolved in the
+      // restaurant's own zone. Leaving it in London would put every predicted 86 time
+      // five and a half hours out.
+      name: "Brigade", slug: RESTAURANT_SLUG, timezone: "Asia/Kolkata",
+      currency: "INR", tax_rate: 0.05, service_hours: SERVICE_HOURS, covers: 60,
     })
     .select("id").single();
   if (rErr || !restaurant) throw new Error(`restaurant: ${rErr?.message}`);
@@ -439,11 +448,26 @@ async function main(): Promise<void> {
    * board actionable.
    */
   const NEAR_86: Record<string, number> = {
-    "Sea bass fillet": 4,     // → Sea bass main shows "4 left", bass binds alone
-    "King scallops": 9,       // → Scallops starter shows "3 left" (3 per portion)
-    // Wild garlic deliberately NOT pinned: it used to be set to 0.06, which also
-    // yielded exactly 3 portions and tied with the scallops. Left to the normal
-    // par-level fill so King scallops is the unambiguous constraint.
+    // 0.75kg of prawns left. Tandoori prawns use 0.18/portion → 4 left; kadai prawns
+    // use 0.16 → 4 as well. One ingredient capping TWO dishes is deliberate: order a
+    // tandoori prawn and the kadai countdown moves too, which is the per-ingredient
+    // demand aggregation in place_order() made visible on screen.
+    "Tiger prawns": 0.75,
+    // 2.2kg of goat. Rogan josh takes 0.28/portion → 7; the biryani takes 0.25 → 8. The
+    // same shortage, two different numbers, because the recipes are different — which is
+    // the whole argument for computing availability from the BOM instead of storing a flag.
+    "Goat leg, bone-in": 2.2,
+    // Comfortable but finite, so the board has a middle band and not just two red rows.
+    "Goat mince": 2.4,        // → seekh kebab 12 left
+    //
+    // Every OTHER ingredient in those four recipes is left to the normal par-level fill,
+    // and each was checked to land in the hundreds of portions. That check is the point of
+    // this list: `portions = min(over ingredients)`, so if two ingredients TIE at the
+    // binding count, topping up either one moves nothing — the other still caps the dish.
+    // That is min() behaving correctly, but on a demo it reads as a broken write path: a
+    // manager adds stock and the number sits there. It also makes dish_binding_ingredient
+    // arbitrary between the tied rows, which undermines the "because you have 0.75kg of
+    // prawns" line that makes the board actionable rather than merely alarming.
   };
 
   for (const ing of INGREDIENTS) {

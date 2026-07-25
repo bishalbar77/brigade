@@ -25,7 +25,7 @@ quadranted into Star / Plowhorse / Puzzle / Dog (Kasavana–Smith; see
 promote, cut. This is the chart that makes an owner change something on Monday.
 
 **3. Demand forecast** — projected covers and per-dish demand for the next few days from EWMA velocity by
-weekday × daypart, with the prep implication ("Saturday dinner: prep 18 branzino").
+weekday × daypart, with the prep implication ("Saturday dinner: prep 18 butter chicken").
 
 **4. Inventory intelligence** — reorder suggestions, waste variance per ingredient, and food cost as a
 percentage of revenue against the 28–32% industry band from [../01-overview.md](../01-overview.md).

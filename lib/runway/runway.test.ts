@@ -359,6 +359,21 @@ describe("timezone", () => {
     expect(run("Europe/London").predicted86Label).toBe("19:25");
     // Same instant, same maths, one hour earlier on the UTC clock.
     expect(run("UTC").predicted86Label).toBe("18:25");
+    // The zone this restaurant actually trades in, and the reason it gets its own case:
+    // UTC+5:30 is a HALF-HOUR offset, which is where naive time handling that happens to
+    // work for every whole-hour zone falls over. 18:25 UTC + 5:30 = 23:55.
+    expect(run("Asia/Kolkata").predicted86Label).toBe("23:55");
+  });
+
+  it("keeps the half-hour offset intact across the minute, not just the hour", () => {
+    // A rounding bug that drops the :30 would give 23:25 or 00:25 here. Both would look
+    // like plausible clock times on the board, which is why this is asserted rather
+    // than eyeballed.
+    const label = run("Asia/Kolkata").predicted86Label!;
+    const [h, m] = label.split(":").map(Number);
+    const [uh, um] = run("UTC").predicted86Label!.split(":").map(Number);
+    const diff = ((h! * 60 + m!) - (uh! * 60 + um!) + 1440) % 1440;
+    expect(diff).toBe(330);
   });
 
   it("gives the same label wherever the process happens to run", () => {

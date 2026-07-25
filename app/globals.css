@@ -126,6 +126,76 @@
   --gauge-track-h: 5px;
 }
 
+/*
+ * Ops on a PHONE.
+ *
+ * The block above is tuned for one specific thing: a screen bolted to a kitchen wall,
+ * read from about two metres, through glare, by someone whose hands are busy. Hence 24px
+ * body text and deliberately tight spacing — fit more on a big surface, make every glyph
+ * carry across the room.
+ *
+ * On a 375px phone held at arm's length that combination is the worst of both: type sized
+ * for a wall inside a viewport a fifth the width, with the padding turned DOWN to make
+ * room for it. Meera checking the numbers on the way home and Tom counting stock in the
+ * store cupboard are both on phones, and neither is two metres away from it.
+ *
+ * So the wall values are scoped to wide viewports, which is where wall screens actually
+ * are. This does not weaken the "legible at 2m" claim — it makes it accurate, because a
+ * phone was never at 2m.
+ *
+ * Two things deliberately do NOT shrink:
+ *   - tap targets stay >= 44px. A hand is the same size on a phone as on a wall, and this
+ *     is the surface where a mis-tap fires the wrong ticket.
+ *   - the KDS docket type. A cook reading the pass on their phone is still reading a
+ *     ticket under pressure, so dockets keep a floor set below.
+ */
+@media (max-width: 640px) {
+  [data-density="ops"] {
+    --text-step--1: 0.875rem;
+    --text-step-0: 1.0625rem;
+    --text-step-1: 1.3125rem;
+    --text-step-2: 1.625rem;
+    --text-step-3: 2rem;
+
+    /* Spacing goes UP, not down: the tightness only bought room for wall-sized type. */
+    --space-3: 0.625rem;
+    --space-4: 0.8125rem;
+    --space-5: 1rem;
+    --space-6: 1.375rem;
+    --space-7: 1.75rem;
+
+    /* The gauge scales with the type or it swallows the row it belongs to. */
+    --gauge-tick-w: 8px;
+    --gauge-tick-h: 24px;
+    --gauge-gap: 4px;
+    --gauge-track-h: 4px;
+  }
+
+  [data-density="ops"] button,
+  [data-density="ops"] a[role="button"] {
+    min-height: 44px;
+  }
+
+  /* The docket is the exception: a ticket is read under pressure at any distance. */
+  .docket {
+    font-size: 1.1875rem;
+  }
+
+  /* The ops header is a wordmark, a seven-item tap strip and an account block. At this
+     width they cannot share a line, so the strip gets its own row at full bleed rather
+     than being squeezed into a corner of the first one. */
+  .ops-header {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: var(--space-3);
+  }
+  .ops-header > .ops-nav {
+    grid-column: 1 / -1;
+    order: 3;
+  }
+}
+
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;

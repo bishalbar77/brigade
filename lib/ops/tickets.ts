@@ -17,12 +17,26 @@ export type Station = "grill" | "saute" | "larder" | "pastry" | "bar" | "pass";
 
 export const STATIONS: Station[] = ["grill", "saute", "larder", "pastry", "bar"];
 
-/** Kitchen vernacular is correct on ops surfaces — this is what staff actually say. */
+/*
+ * Kitchen vernacular is correct on ops surfaces — this is what staff actually say. In an
+ * Indian kitchen that is not "Grill" and "Larder", so the LABELS are Indian while the
+ * enum values stay as they are:
+ *
+ *   grill  -> Tandoor   kebabs, and every bread
+ *   saute  -> Curry     the wet section: gravies, dals, biryani
+ *   larder -> Chaat     cold assembly
+ *   pastry -> Mithai
+ *
+ * Renaming a Postgres enum means rewriting every dependent policy, function signature and
+ * index the day before a deadline, for a change that is entirely presentational. What a
+ * station is CALLED belongs here; what it IS belongs to the schema. The brigade structure
+ * is the same either way — that is rather the point of a brigade.
+ */
 export const STATION_LABEL: Record<Station, string> = {
-  grill: "Grill",
-  saute: "Sauté",
-  larder: "Larder",
-  pastry: "Pastry",
+  grill: "Tandoor",
+  saute: "Curry",
+  larder: "Chaat",
+  pastry: "Mithai",
   bar: "Bar",
   pass: "Pass",
 };

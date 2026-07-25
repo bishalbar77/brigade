@@ -72,6 +72,10 @@ export function Docket({ docket, now }: { docket: DocketData; now: number }) {
 
   return (
     <article
+      // Named so the narrow-viewport rule in globals.css can hold the ticket's type up
+      // while the rest of the ops scale steps down. A cook reading the pass on their
+      // phone is still reading a ticket under pressure.
+      className="docket"
       style={{
         border: `2px solid ${level === "late" ? "var(--color-runway-critical)" : "var(--color-border-strong)"}`,
         borderRadius: "var(--radius-md)",

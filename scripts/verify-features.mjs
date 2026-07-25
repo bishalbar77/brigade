@@ -723,7 +723,8 @@ async function main() {
       const paid = await app(`/api/orders/${S.orderId}/pay`, {
         session: S.priya, method: "POST", body: { method: "card", tipCents: 250 },
       });
-      const money = (c) => `£${((c ?? 0) / 100).toFixed(2)}`;
+      // Paise, like every money column. ₹480 is 48000.
+      const money = (c) => `₹${((c ?? 0) / 100).toFixed(2)}`;
       // The total is read back from the database, not from the response: the point of
       // the check is that the restaurant priced the bill, so trusting a number the
       // request itself returned would prove nothing.

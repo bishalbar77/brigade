@@ -35,6 +35,9 @@ export default async function OpsLayout({ children }: { children: React.ReactNod
       style={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}
     >
       <header
+        // .ops-header lets the narrow-viewport rule give the tap strip its own full-width
+        // row instead of squeezing it beside the wordmark and the account block.
+        className="ops-header"
         style={{
           display: "flex",
           alignItems: "center",
@@ -61,7 +64,7 @@ export default async function OpsLayout({ children }: { children: React.ReactNod
 
         {/* Tap strip. No dropdowns — a cook with busy hands gets one tap. */}
         <nav
-          className="scroll-x"
+          className="scroll-x ops-nav"
           style={{ display: "flex", gap: "var(--space-2)", flex: 1 }}
         >
           {NAV.map((item) => (

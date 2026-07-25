@@ -5,7 +5,7 @@
 _As deployed:_ `/ops/runway`, with stock top-up on the binding ingredient.
 
 **Problem it solves:** The product's entire differentiation, on one screen. Existing POS systems tell
-you a dish is out *after* stock hits zero. This tells the kitchen at 18:00 that the branzino will 86 at
+you a dish is out *after* stock hits zero. This tells the kitchen at 18:00 that the tandoori prawns will 86 at
 roughly 20:40 with 4 portions left — while there is still time to prep more, adjust the menu, or brief
 the floor.
 
@@ -57,7 +57,7 @@ Subscribes to `restaurant:{id}:availability`. Recomputes bands and re-sorts on e
   rather than given a fabricated prediction.
 - **`portions ≤ 3` forces the critical band** regardless of rate — at low absolute counts the ratio is
   noisy, and "3 left" matters on its own.
-- **Show the binding ingredient.** "Branzino 86s at 20:40" is information; "because you have 4 lemons"
+- **Show the binding ingredient.** "Tandoori prawns 86s at 20:40" is information; "because you have 0.75kg of prawns"
   is something a chef can act on in the next five minutes.
 - **Unlimited dishes** (no BOM entered) are grouped separately, not shown with an infinite runway.
 - The countdown animates on **change**, then rests. A permanently moving element in a kitchen is noise.

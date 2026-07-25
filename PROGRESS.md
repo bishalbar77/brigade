@@ -3,9 +3,9 @@
 > Resume file. Any new session: read this first, do what `NEXT:` says. Update it at the end of
 > every work block, not retroactively. Plan lives at `~/.claude/plans/precious-stirring-hejlsberg.md`.
 
-**NEXT:** restart the session so plugin skills load, then wireframes → `superpowers:brainstorm` →
-`frontend-design`, then build the guest menu (first real UI). Backend is done and verified.
-Optional when convenient: paste `supabase/patches/001_fk_deferrable.sql` in the SQL editor.
+**NEXT (yours, needs a browser):** work through [`DEPLOY.md`](DEPLOY.md) — public GitHub repo →
+Vercel → Google OAuth → SMTP decision. Production needs only 2 env vars, both public.
+**NEXT (mine):** read-only ops screens (floor, pantry, BOM view, bookings) + the analytics matrix.
 **Deadline:** 2026-07-27 (day 1 of 3 · started 2026-07-25)
 **Live URL:** — **Repo:** local only, not pushed — **Supabase project:** `pgtpcgxjgdymibfccgns` ✔ seeded
 

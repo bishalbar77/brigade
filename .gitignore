@@ -9,6 +9,13 @@ dist/
 .env.local
 .env*.local
 
+# Local working files, deliberately untracked.
+# CLAUDE.md  — assistant instructions for this repo
+# PROGRESS.md — running build state and credential status
+# Both stay on disk; they're just not part of the public repo.
+CLAUDE.md
+PROGRESS.md
+
 .DS_Store
 *.pem
 npm-debug.log*

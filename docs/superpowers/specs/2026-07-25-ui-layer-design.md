@@ -12,8 +12,8 @@ seeded history (1077 orders / 5286 items). `npm run verify:data` passes 11/11. `
 placeholder files and a token-name scaffold in `globals.css`.
 
 **Not in scope.** Palette and typography. Those are `frontend-design`'s free axes; pre-deciding them
-here would waste that skill's process. The only constraint carried forward is the one already in
-[CLAUDE.md](../../../CLAUDE.md): don't spend a free axis on the three known AI-design defaults.
+here would waste that skill's process. The only constraint carried forward: don't spend a free axis on
+the three known AI-design defaults, listed in [04-design-system.md](../../04-design-system.md).
 
 ---
 

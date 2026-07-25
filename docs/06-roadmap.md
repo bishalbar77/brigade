@@ -1,11 +1,11 @@
 # 06 — Roadmap, cut line, risks
 
-Solo. Three days. 25–27 July 2026. Live state is in [`PROGRESS.md`](../PROGRESS.md) — this file is the
-plan, that file is the truth.
+Solo. Three days. 25–27 July 2026. This file is the plan; running build state is tracked separately
+outside the repo.
 
 ## Day 1 — docs, design, foundation
 
-1. `PROGRESS.md` ✔, then this docs tree
+1. This docs tree — it *is* the spec the code is written against
 2. Greybox wireframes → `superpowers:brainstorm` → `frontend-design`
 3. `git init`, **public** GitHub repo, first commit
 4. Next.js 15 + TS + Tailwind v4 scaffold
@@ -43,7 +43,8 @@ The guest→kitchen→guest circuit, which is the demo.
 
 ## Cut line
 
-Ordered. If behind, cut from the top and record it in `PROGRESS.md` → *Cut so far*.
+Ordered. If behind, cut from the top and record what went in
+[07-submission.md](07-submission.md) so the compliance matrix stays honest.
 
 1. Staff / shift management
 2. Split billing

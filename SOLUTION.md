@@ -349,5 +349,5 @@ against it.
 - [Sculpture Hospitality — restaurant industry statistics 2025](https://www.sculpturehospitality.com/blog/restaurant-industry-statistics-2025)
 - [Apicbase — restaurant inventory statistics](https://get.apicbase.com/restaurant-inventory-statistics/)
 
-*Detailed specs: [`docs/`](docs/README.md) · Build state: [`PROGRESS.md`](PROGRESS.md) · Wireframes:
-[`wireframes/index.html`](wireframes/index.html)*
+*Detailed specs: [`docs/`](docs/README.md) · Wireframes: [`wireframes/index.html`](wireframes/index.html)
+· Deploy checklist: [`DEPLOY.md`](DEPLOY.md)*

@@ -1,9 +1,41 @@
 # 04 — Design system
 
-> **Status: structure defined, visual direction pending.** Palette and typography are deliberately
-> left open here and will be set by the `frontend-design` skill, then folded back into this file.
-> Everything below — the density split, the token *names*, the accessibility floor — is fixed and
-> does not depend on which palette wins.
+> **Status: built.** Implemented in `app/globals.css`.
+
+## The direction: blue is the only colour food never is
+
+Professional kitchens use blue for everything that must not be mistaken for food — food-safe gloves,
+blue catering plasters, blue boards for raw fish — precisely because no ingredient is blue, so it reads
+instantly against anything. That turns the palette into a rule rather than a preference:
+
+> **Blue = the system talking. Warm = the food talking.**
+
+Every interactive element is steel blue. Every scarcity state is amber → flame → drained ash. The two
+vocabularies cannot be confused, which is what the never-colour-alone rule below is actually
+protecting against.
+
+**The ground is dark and warm**, because both audiences need dark for reasons that happen to agree: a
+diner in a dim room (a bright screen blinds her and kills the mood) and a cook on an eight-hour shift
+(dark reduces fatigue, bone-on-espresso holds contrast at 2 m). Warm rather than neutral because the
+guest side has to be appetising — a dining room at service, not a dashboard.
+
+| Token | Hex | Role |
+|---|---|---|
+| `--color-bg` | `#1E1815` | espresso — the room at service |
+| `--color-bg-raised` | `#2A2320` | cards, dockets |
+| `--color-fg` | `#F4EFE6` | enamel white, warm · 13.9:1 on bg |
+| `--color-fg-muted` | `#B3A79B` | 6.6:1 — safe for body |
+| `--color-fg-subtle` | `#8A7F73` | 4.1:1 — **large text only** |
+| `--color-accent` | `#3B8FD9` | food-safe blue · 5.6:1 on bg |
+| `--color-runway-low` | `#E0A33C` | amber |
+| `--color-runway-critical` | `#D9502F` | flame |
+| `--color-runway-out` | `#7D7266` | ash — drained, because it's gone |
+
+**Typefaces.** `--font-display` **Bricolage Grotesque** — irregular, industrial-editorial, restrained
+to titles and runway numerals. `--font-body` **Newsreader** — real menus are set in serif; it signals
+restaurant rather than dashboard, and it's the appetite lever on the guest side. `--font-mono`
+**IBM Plex Mono** — load-bearing, not decorative: tabular figures stop a countdown's digits jittering
+as they change, and dockets are a tabular read.
 
 ## The central constraint: one system, two densities
 
@@ -63,8 +95,9 @@ must be a one-file change.
 
 ## Typography
 
-Per the aesthetics guidance in [`CLAUDE.md`](../CLAUDE.md): no Inter, Roboto, Open Sans, Lato, or system
-stacks. Three roles —
+No Inter, Roboto, Open Sans, Lato, or system stacks — see
+[Prompting for Frontend Aesthetics](https://github.com/anthropics/claude-cookbooks/blob/main/coding/prompting_for_frontend_aesthetics.ipynb)
+for why those read as defaults rather than choices. Three roles —
 
 - `--font-display` — characterful, used with restraint (headings, the runway numerals)
 - `--font-body` — comfortable at small sizes on a phone
@@ -72,7 +105,28 @@ stacks. Three roles —
   is a tabular reading task and monospace digits stop numbers from jittering as they count down.
 
 Use extremes rather than middles — 200 against 800, not 400 against 600; size jumps of 3× rather than
-1.5×. Final families chosen by `frontend-design`.
+1.5×.
+
+## Calibration: the defaults to avoid
+
+AI-generated design currently clusters around three looks. All three are legitimate for some brief, but
+they turn up regardless of subject, which makes them defaults rather than choices. Where a brief pins a
+direction, the brief wins; where it leaves an axis free, that freedom should not be spent here.
+
+1. Warm cream background (near `#F4F1EA`) + high-contrast serif display + terracotta accent
+2. Near-black background + a single bright acid-green or vermilion accent
+3. Broadsheet layout — hairline rules, zero border-radius, dense newspaper columns
+
+How the chosen direction clears each: no cream and no terracotta; the ground is visibly warm espresso
+rather than near-black and the accent is a mid blue rather than an acid pop, with warm reds appearing
+only as *status* and never as the brand voice; and the docket stays a **component** with its own
+surface instead of the page becoming a broadsheet.
+
+That third one was a live risk rather than a hypothetical — a thermal-printed chit aesthetic is
+genuinely right for a kitchen ticket and sits one step from cluster 3. The paper reference is kept to
+the monospace and the tear edge.
+
+Source: [Prompting for Frontend Aesthetics](https://github.com/anthropics/claude-cookbooks/blob/main/coding/prompting_for_frontend_aesthetics.ipynb).
 
 ## The signature element: the runway countdown
 

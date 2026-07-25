@@ -10,7 +10,6 @@ leave it.
 
 | # | Doc | Read it when |
 |---|---|---|
-| — | [PROGRESS.md](../PROGRESS.md) | **First, always.** Where the build actually is. |
 | 1 | [01-overview.md](01-overview.md) | You want to know what Brigade is and why it isn't a Toast clone |
 | 2 | [02-architecture.md](02-architecture.md) | You need the stack, the topology, or why a choice was made |
 | 3 | [03-data-model.md](03-data-model.md) | You're touching the schema, RLS, or migrations |

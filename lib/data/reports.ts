@@ -20,19 +20,55 @@ import type { Station } from "@/lib/ops/tickets";
  * COST VISIBILITY. `ingredients.cost_per_unit_cents` is only read when the caller is
  * owner or manager, and the role is checked here rather than trusted from a prop.
  *
- * ⚠ KNOWN GAP, worth fixing rather than hiding: the `ingredients_read` RLS policy
- * currently allows ANY staff role, not just manager/owner, which contradicts
- * docs/03-data-model.md ("cost and margin fields are gated to owner/manager"). So
- * this role check is the only thing stopping a chef's session reading cost through
- * the REST API directly. Tightening the policy needs `ingredients_public` to become
- * security-definer at the same time, or non-manager staff surfaces lose stock counts
- * entirely. Tracked for a patch — see the note at the bottom of this file.
+ * The database enforces this too, as of patch 003: `ingredients_read` requires
+ * is_manager(), and `ingredients_public` exists so non-manager staff keep their stock
+ * counts without the cost columns. Asserted in scripts/sql-check.sh, so the role check
+ * here is defence in depth rather than the only thing standing between a chef's session
+ * and cost_per_unit_cents. (This comment previously described that gap as open long
+ * after it was closed — a stale warning misleads in the same way a stale promise does.)
  */
 
 const one = <T,>(rel: T | T[] | null | undefined): T | null =>
   rel == null ? null : Array.isArray(rel) ? (rel[0] ?? null) : rel;
 
 const canSeeCost = (role: string | null | undefined) => role === "owner" || role === "manager";
+
+/** PostgREST's server-side row cap on Supabase. A client `.limit()` cannot raise it. */
+const PAGE = 1000;
+
+type Rangeable<T> = {
+  range: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>;
+};
+
+/**
+ * Read EVERY row, not the first thousand.
+ *
+ * PostgREST enforces `db-max-rows` (1000 on Supabase) and a client-side `.limit(20000)`
+ * cannot raise it — the request returns 1000 rows and HTTP 200, with the real count only
+ * in the `content-range` header nobody reads. There is no error to notice.
+ *
+ * What that cost: /ops/analytics computed its food-cost ratio from 1000 of 3411 order
+ * items and printed **5.9%**, directly above the line that names the 28–32% industry
+ * band it compares against. Every per-dish "Sold" count was short by up to 8.7×, and the
+ * twenty dish counts summed to exactly 1000, which is the tell. A physically impossible
+ * number on the screen that carries the whole "intelligence layer" claim.
+ *
+ * Takes a builder FACTORY rather than a query, because a supabase-js builder executes
+ * once and cannot be re-awaited with a different range.
+ */
+async function pageAll<T>(build: () => Rangeable<T>): Promise<T[]> {
+  const rows: T[] = [];
+  for (let offset = 0; ; offset += PAGE) {
+    const { data, error } = await build().range(offset, offset + PAGE - 1);
+    if (error || !data) break;
+    rows.push(...data);
+    // A short page is the last page. Equal-to-PAGE is ambiguous, so we ask again.
+    if (data.length < PAGE) break;
+    // Backstop: a demo dataset that reaches this has a different problem.
+    if (rows.length >= 100_000) break;
+  }
+  return rows;
+}
 
 /* ─────────────────────────────── floor ─────────────────────────────── */
 
@@ -466,28 +502,53 @@ export async function getAnalytics(windowDays = 28, now: Date = new Date()): Pro
   const from = new Date(now);
   from.setDate(from.getDate() - windowDays);
 
-  const [{ data: orders }, { data: items }, { data: dishes }, { data: recipes }] =
-    await Promise.all([
+  // Both of these exceed 1000 rows over a 28-day window, so both are paged. See pageAll:
+  // `.limit(5000)` and `.limit(20000)` returned 1000 rows each, silently.
+  const [orders, items, { data: dishes }, { data: recipes }] = await Promise.all([
+    pageAll<{
+      id: string; opened_at: string; closed_at: string | null;
+      total_cents: number; subtotal_cents: number; status: string;
+      tables: { seats: number } | { seats: number }[] | null;
+    }>(() =>
       supabase
         .from("orders")
         .select("id, opened_at, closed_at, total_cents, subtotal_cents, status, tables ( seats )")
         .gte("opened_at", from.toISOString())
-        .limit(5000),
+        .order("opened_at"),
+    ),
+    pageAll<{ dish_id: string; qty: number; unit_price_cents: number; status: string }>(() =>
       supabase
         .from("order_items")
         .select("dish_id, qty, unit_price_cents, status, orders!inner ( opened_at )")
         .gte("orders.opened_at", from.toISOString())
         .neq("status", "voided")
-        .limit(20000),
-      supabase.from("dishes").select("id, name, price_cents").eq("is_archived", false),
-      supabase
-        .from("recipe_items")
-        .select("dish_id, ingredient_id, qty, ingredients ( cost_per_unit_cents )"),
-    ]);
+        .order("dish_id"),
+    ),
+    supabase.from("dishes").select("id, name, price_cents").eq("is_archived", false),
+    supabase
+      .from("recipe_items")
+      .select("dish_id, ingredient_id, qty, ingredients ( cost_per_unit_cents )"),
+  ]);
 
   const paid = (orders ?? []).filter((o) => o.status === "paid");
 
-  const revenueCents = paid.reduce((sum, o) => sum + ((o.total_cents as number) ?? 0), 0);
+  // subtotal_cents, NOT total_cents, for two reasons that both make the ratio below wrong:
+  //   - total_cents is gross of 8% tax. Tax is not trading revenue, and putting it in the
+  //     denominator of a food-cost percentage understates the percentage by that much.
+  //   - the two writers of total_cents disagree about tips. pay_order() adds the tip
+  //     (patch 003); the seed does not. So every order paid live during a demo books its
+  //     tip as revenue while the seeded history does not — the same tile would change
+  //     definition mid-demo.
+  // Using the subtotal excludes tax and tips from both sides, so the figure is one thing
+  // consistently. The tile is labelled "net revenue" to match.
+  const revenueCents = paid.reduce((sum, o) => sum + ((o.subtotal_cents as number) ?? 0), 0);
+
+  // This counts SEATS AT THE TABLES USED, not people. A four-top with two diners at it
+  // counts four, and an order with no table (a QR-less walk-up) is assumed to be two.
+  // Renaming the tile to "seats turned" rather than inventing a guest count: the honest
+  // fix is a `covers` column set when a party is seated — patch 004's trigger is the hook
+  // for it — and inventing one from furniture would be a worse number wearing a better
+  // name. Tracked in docs/07-submission.md.
   const covers = paid.reduce((n, o) => n + (one<{ seats: number }>(o.tables)?.seats ?? 2), 0);
 
   const turns = paid
@@ -563,15 +624,17 @@ export async function getAnalytics(windowDays = 28, now: Date = new Date()): Pro
 }
 
 /*
- * TODO(patch 003) — tighten cost visibility at the database layer.
+ * DONE, patch 003 — cost visibility is enforced at the database layer.
  *
- * `ingredients_read` currently permits any staff role, so a chef's JWT can read
- * cost_per_unit_cents straight from the REST API even though every UI path here gates
- * it to manager/owner. docs/03-data-model.md claims the stricter rule, so the docs and
- * the schema disagree and the docs are the intent.
- *
- * The fix is two changes that must land together:
  *   1. ingredients_read → is_manager()
- *   2. ingredients_public → security DEFINER (currently security_invoker, so it would
- *      return nothing to a chef once (1) lands, breaking the pantry for them)
+ *   2. ingredients_public added, owner-rights, so non-manager staff keep stock counts
+ *      without the cost columns
+ *
+ * Both asserted in scripts/sql-check.sh ("ingredients_read requires is_manager").
+ *
+ * Patch 006 then had to REVOKE writes on ingredients_public and every other view: an
+ * owner-rights view is auto-updatable and Supabase grants write access on new views by
+ * default, so (2) had quietly created a path for a chef to rewrite stock_qty with no
+ * ledger row — the exact invariant (1) was protecting. Fixing a read leak with a view
+ * opens a write leak unless the grants are dealt with in the same breath.
  */

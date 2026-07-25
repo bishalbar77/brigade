@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { AccountBar } from "@/components/AccountBar";
+import { getCurrentProfile } from "@/lib/supabase/server";
 
 /*
  * Ops shell. Rahul: wall screen read at ~2 METRES, hot bright kitchen, glare on
@@ -22,7 +24,11 @@ const NAV = [
   { href: "/ops/analytics", label: "Service", hint: "numbers" },
 ] as const;
 
-export default function OpsLayout({ children }: { children: React.ReactNode }) {
+export default async function OpsLayout({ children }: { children: React.ReactNode }) {
+  // On a shared wall screen, "who is this logged in as" is a real question with real
+  // consequences — the station decides which tickets this person is allowed to fire.
+  const profile = await getCurrentProfile();
+
   return (
     <div
       data-density="ops"
@@ -86,6 +92,13 @@ export default function OpsLayout({ children }: { children: React.ReactNode }) {
             </Link>
           ))}
         </nav>
+
+        <AccountBar
+          name={profile?.full_name as string | null}
+          role={profile?.role as string | null}
+          station={profile?.station as string | null}
+          variant="ops"
+        />
       </header>
 
       <main style={{ flex: 1, padding: "var(--space-4)" }}>{children}</main>

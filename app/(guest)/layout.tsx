@@ -1,12 +1,21 @@
 import Link from "next/link";
+import { AccountBar } from "@/components/AccountBar";
+import { CartLink } from "@/components/guest/CartLink";
+import { getCurrentProfile } from "@/lib/supabase/server";
 
 /*
  * Guest shell. Priya: phone one-handed, dim loud room, ~30cm, 90 seconds.
  *
  * Plain language throughout — she does not know what "expo" or "the pass" mean.
  * Kitchen vernacular belongs on the ops surfaces only.
+ *
+ * The header carries the two things a diner needs at all times and previously had
+ * neither of: where her order is (nothing linked to /cart at all), and who she is signed
+ * in as. Reading the profile makes every guest route dynamic, which is correct — a
+ * personalised header cannot be cached across people.
  */
-export default function GuestLayout({ children }: { children: React.ReactNode }) {
+export default async function GuestLayout({ children }: { children: React.ReactNode }) {
+  const profile = await getCurrentProfile();
   return (
     <div
       data-density="guest"
@@ -54,22 +63,8 @@ export default function GuestLayout({ children }: { children: React.ReactNode })
           >
             Book
           </Link>
-          <Link
-            href="/auth/sign-in"
-            role="button"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              padding: "0 var(--space-4)",
-              borderRadius: "var(--radius-md)",
-              background: "var(--color-accent)",
-              color: "var(--color-accent-fg)",
-              fontWeight: 600,
-              textDecoration: "none",
-            }}
-          >
-            Sign in
-          </Link>
+          <CartLink />
+          <AccountBar name={profile?.full_name as string | null} variant="guest" />
         </nav>
       </header>
 

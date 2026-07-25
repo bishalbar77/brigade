@@ -55,9 +55,14 @@ export default async function AnalyticsPage() {
         title="Service"
         subtitle={`The last ${windowDays} days of trading. Everything here is computed from the order ledger — no figure is typed in.`}
         stats={[
-          { label: "covers", value: String(summary.covers) },
-          { label: "revenue", value: formatCents(summary.revenueCents) },
-          { label: "per cover", value: formatCents(summary.perCoverCents) },
+          // Each label names exactly what the number is. "covers" implied a guest count
+          // and the figure is seats at the tables used; "revenue" implied takings and the
+          // figure now excludes tax and tips so it stays one thing all evening. A tile
+          // whose label overstates its number is the kind of error nobody catches on
+          // stage and nobody forgives afterwards.
+          { label: "seats turned", value: String(summary.covers) },
+          { label: "net revenue", value: formatCents(summary.revenueCents) },
+          { label: "per seat", value: formatCents(summary.perCoverCents) },
           {
             label: "median turn",
             value: summary.avgTurnMinutes !== null ? `${summary.avgTurnMinutes}m` : "—",

@@ -236,6 +236,50 @@ assert "a diner can see how many tables exist" \
 assert "a diner can see when the book is busy, without seeing who booked" \
   "select count(*) from information_schema.columns where table_name='reservation_load' and column_name in ('guest_id','guest_name')" "0"
 
+# The one that mattered most, and the one nothing was checking. Supabase's default
+# privileges grant ALL on new "tables" to anon/authenticated — and a view is a table for
+# that purpose. A single-table view with no aggregate is auto-updatable, and one without
+# security_invoker runs as OWNER, so RLS is never consulted. Result, reproduced live: an
+# anonymous caller could INSERT/UPDATE/DELETE reservations through reservation_load, and a
+# chef could rewrite stock_qty through ingredients_public with no ledger row at all.
+#
+# Counts every (view, write privilege, role) combination that still exists. Anything but 0
+# means at least one view is a way around RLS.
+# `offset 0` is load-bearing: it is an optimisation fence. Without it Postgres may push
+# has_table_privilege() below the schema filter and evaluate it against catalog views,
+# which fails with `relation "public.pg_shadow" does not exist` — a green-looking assertion
+# that is really an error. pg_views rather than information_schema.views for the same
+# reason: it is a plain catalog view with no access filtering of its own.
+assert "NO view in public is writable by anon or authenticated (RLS cannot be gone around)" \
+  "select count(*)
+     from (select viewname from pg_views where schemaname='public' offset 0) v
+     cross join (values ('insert'),('update'),('delete')) p(priv)
+     cross join (values ('anon'),('authenticated')) r(role)
+    where has_table_privilege(r.role, format('public.%I', v.viewname), p.priv)" "0"
+
+assert "…and they are all still READABLE, which is the entire point of them" \
+  "select count(*)
+     from (select viewname from pg_views where schemaname='public' offset 0) v
+    where not has_table_privilege('anon', format('public.%I', v.viewname), 'select')" "0"
+
+assert "adjust_stock checks the ingredient's restaurant, not just the caller's role" \
+  "select prosrc like '%another restaurant%' from pg_proc where proname='adjust_stock'" "t"
+
+assert "void_order_item checks tenant (it moves stock AND money)" \
+  "select prosrc like '%another restaurant%' from pg_proc where proname='void_order_item'" "t"
+
+assert "voiding every item recomputes to zero instead of matching no row" \
+  "select prosrc not like '%group by order_id%' from pg_proc where proname='void_order_item'" "t"
+
+assert "place_order rejects dishes from another restaurant's menu" \
+  "select prosrc like '%BAD_ITEMS%' from pg_proc where proname='place_order'" "t"
+
+assert "profiles_update_self pins station as well as role and restaurant" \
+  "select with_check like '%station%' from pg_policies where tablename='profiles' and policyname='profiles_update_self'" "t"
+
+assert "recipe_items_read is scoped to the caller's own restaurant" \
+  "select qual like '%current_restaurant%' from pg_policies where tablename='recipe_items' and policyname='recipe_items_read'" "t"
+
 echo
 if [[ $FAILED -eq 0 ]]; then
   echo "✔ SQL executes cleanly, every patch is genuinely re-runnable, and every"

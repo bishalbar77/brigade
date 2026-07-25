@@ -878,6 +878,116 @@ async function main() {
   // 13 ────────────────────────────────────────────────────────────────────────
   await feature({
     docs: [],
+    title: "Can you actually find any of it?",
+    plain: "In plain English: every check above reached its screen by typing the address. " +
+      "This one asks whether a person could get there by tapping — and whether they can " +
+      "see who they are signed in as and get back out.",
+    run: async (ok) => {
+      // This block exists because /cart was built, tested and completely unreachable:
+      // nothing in the app linked to it, so "Add to order" put a dish somewhere the
+      // diner could not find. Requesting a URL is not the same as offering a route to it.
+      const menu = await app("/menu", { session: S.priya });
+      ok("the menu offers a way to the cart", /href="\/cart"/.test(menu.text),
+        /href="\/cart"/.test(menu.text) ? "the header links to it" : "NOTHING links to /cart");
+
+      const dish = S.menu[0] ? await app(`/menu/${S.menu[0].id}`, { session: S.priya }) : { text: "" };
+      ok("and a dish page offers a way to add to it", /Add to order/i.test(dish.text));
+
+      ok("a signed-in diner sees their own name in the header",
+        menu.text.includes("Priya"), "first name only at 375px");
+      ok("…and a way to sign out", /action="\/auth\/sign-out"/.test(menu.text));
+
+      const strangerMenu = await app("/menu");
+      ok("a signed-out visitor is offered a way in instead",
+        /href="\/auth\/sign-in"/.test(strangerMenu.text) && !/action="\/auth\/sign-out"/.test(strangerMenu.text));
+
+      // The ops shell had no identity and no exit at all, so anyone signed in as the
+      // grill chef stayed the grill chef — with seven roles, being unable to see or
+      // change which one you are is the wrong first impression.
+      const kds = await app("/ops/kds", { session: S.grill });
+      ok("the kitchen screen says who is logged in, with their station",
+        kds.text.includes("Rahul") && /Chef de partie/.test(kds.text) && kds.text.includes("grill"),
+        "name, brigade role and station — it is a shared wall screen");
+      ok("…and offers a way out, so a role can be switched",
+        /action="\/auth\/sign-out"/.test(kds.text));
+
+      // Prove sign-out actually ends the session, on a throwaway login so this test does
+      // not sign itself out of everything else it is doing.
+      const throwaway = await signIn("mei@brigade.test");
+      const out = await app("/auth/sign-out", { session: throwaway, method: "POST" });
+      const after = await as(throwaway, "profiles?select=id&limit=1");
+      ok("signing out really ends the session, not just the screen",
+        (out.status === 307 || out.status === 302 || out.status === 200) &&
+        (after.status === 401 || (Array.isArray(after.body) && after.body.length === 0)),
+        `POST → HTTP ${out.status}, then reading own profile → HTTP ${after.status}`);
+    },
+  });
+
+  // 14 ────────────────────────────────────────────────────────────────────────
+  await feature({
+    docs: [],
+    title: "Going around the app",
+    plain: "In plain English: the app's own screens obey the rules. This checks that " +
+      "someone talking straight to the database, skipping the app entirely, still cannot " +
+      "do what the app would not let them.",
+    run: async (ok) => {
+      // Every one of these was reproducible until patch 006. Views in Postgres are
+      // auto-updatable and Supabase grants write access on new ones by default, so each
+      // view was a way around every policy on its base table.
+      const views = ["menu_public", "dish_availability", "dish_binding_ingredient",
+        "dish_ingredient_names", "ingredients_public", "restaurant_table_count",
+        "reservation_load"];
+      const writable = [];
+      for (const v of views) {
+        const r = await as(null, `${v}?limit=0`, { method: "PATCH", body: JSON.stringify({}) });
+        if (r.status < 400) writable.push(`${v} (${r.status})`);
+      }
+      ok(`none of the ${views.length} views can be WRITTEN by a stranger`,
+        writable.length === 0,
+        writable.length ? `WRITABLE: ${writable.join(", ")}` : "all refused");
+
+      for (const v of views) {
+        const r = await as(null, `${v}?select=*&limit=1`);
+        if (r.status >= 400) { ok(`${v} is still readable`, false, `HTTP ${r.status}`); return; }
+      }
+      ok("…and all of them are still readable, which is the point of them", true,
+        `${views.length}/${views.length}`);
+
+      // The ledger invariant, tested through the side door rather than the front.
+      const target = S.ingredients[0];
+      const viaView = await as(S.grill, `ingredients_public?id=eq.${target.id}`, {
+        method: "PATCH", body: JSON.stringify({ stock_qty: 999 }),
+      });
+      const { body: still } = await db(`ingredients?select=stock_qty&id=eq.${target.id}`);
+      ok("a cook cannot move stock through a view either (no ledger row, no permission)",
+        viaView.status >= 400 && Number(still?.[0]?.stock_qty) !== 999,
+        `HTTP ${viaView.status}, still ${still?.[0]?.stock_qty}`);
+
+      // A chef re-stationing themselves defeats the station gate patch 003 added.
+      const { body: prof } = await db(`profiles?select=station&id=eq.${S.grill.userId}`);
+      const restation = await as(S.grill, `profiles?id=eq.${S.grill.userId}`, {
+        method: "PATCH", body: JSON.stringify({ station: "saute" }),
+      });
+      const { body: profAfter } = await db(`profiles?select=station&id=eq.${S.grill.userId}`);
+      if (profAfter?.[0]?.station !== prof?.[0]?.station) {
+        await db(`profiles?id=eq.${S.grill.userId}`, {
+          method: "PATCH", body: JSON.stringify({ station: prof?.[0]?.station }),
+        });
+      }
+      ok("a cook cannot move themselves to another station to fire its tickets",
+        restation.status >= 400 && profAfter?.[0]?.station === prof?.[0]?.station,
+        `HTTP ${restation.status}, still ${profAfter?.[0]?.station}`);
+
+      const promote = await as(S.grill, `profiles?id=eq.${S.grill.userId}`, {
+        method: "PATCH", body: JSON.stringify({ role: "owner" }),
+      });
+      ok("nor promote themselves to owner", promote.status >= 400, `HTTP ${promote.status}`);
+    },
+  });
+
+  // 15 ────────────────────────────────────────────────────────────────────────
+  await feature({
+    docs: [],
     title: "Every page a judge can click",
     plain: "In plain English: open every single address in the app and check none of " +
       "them is broken.",

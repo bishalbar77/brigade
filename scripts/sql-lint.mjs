@@ -98,13 +98,29 @@ for (const file of files) {
   }
 
   // ── 4. A view over a table with RLS, created without an explicit security mode.
+  //
   // Silently runs as owner and bypasses RLS. That is how dish_binding_ingredient came to
   // leak exact pantry stock to anonymous callers.
+  //
+  // This rule fired on five views and every warning was dismissed as intentional, because
+  // a guest genuinely must read them with no account. That reasoning was only ever about
+  // the READ direction, and the WRITE direction is where the real hole was: Supabase's
+  // default privileges grant ALL on new "tables" to anon/authenticated, a view counts as a
+  // table for that purpose, and a single-table view with no aggregate is auto-updatable.
+  // So each of these views was a way for an anonymous caller to write the base table with
+  // RLS switched off — reproduced live, including a chef moving stock with no ledger row.
+  //
+  // The message now says so, and names the one-line fix, because a warning that only
+  // describes half the risk is a warning that gets waved through. The authoritative check
+  // is the has_table_privilege assertion in scripts/sql-check.sh.
   for (const m of sql.matchAll(/create\s+(?:or\s+replace\s+)?view\s+(\w+)([\s\S]{0,200}?)\bas\b/gi)) {
     const [, name, between] = m;
     if (!/security_invoker/i.test(between)) {
+      const revoked = new RegExp(
+        `revoke[\\s\\S]{0,80}?on\\s+(?:public\\.)?${name}\\s+from`, "i",
+      ).test(sql) || /revoke\s+insert,\s*update,\s*delete\s+on\s+public\.%I/i.test(sql);
       note(file, lineOf(sql, m.index), "view-security-mode",
-        `View "${name}" declares no security mode, so it runs as OWNER and bypasses RLS. That is correct only if it re-imposes tenancy itself (e.g. a current_restaurant() filter) — confirm it does, or add security_invoker = true.`);
+        `View "${name}" runs as OWNER, so it bypasses RLS in BOTH directions. Reads: confirm it re-imposes tenancy itself. Writes: it is auto-updatable and Supabase grants anon/authenticated write privileges on new views by default, so it is a way around every policy on the base table${revoked ? " — a REVOKE for it was found in this file, so this is likely already handled" : ". Add: revoke insert, update, delete on " + name + " from anon, authenticated"}.`);
     }
   }
 

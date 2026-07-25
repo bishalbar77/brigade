@@ -1,6 +1,8 @@
 # Floor map
 
-**User story:** US4 (Gold) · **Status:** planned
+**User story:** US4 (Gold) · **Status:** built (read-only)
+
+_As deployed:_ `/ops/floor`. Real table states and dwell time; seating and bussing are not wired.
 
 **Problem it solves:** "Inefficient staff coordination" and part of "long waiting times for tables." A
 host seating a party needs to know what's actually free right now, and a server needs to see their own

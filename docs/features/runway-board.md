@@ -1,6 +1,8 @@
 # Runway board
 
-**User story:** US5 (Platinum) · **Status:** planned
+**User story:** US5 (Platinum) · **Status:** built
+
+_As deployed:_ `/ops/runway`, with stock top-up on the binding ingredient.
 
 **Problem it solves:** The product's entire differentiation, on one screen. Existing POS systems tell
 you a dish is out *after* stock hits zero. This tells the kitchen at 18:00 that the branzino will 86 at

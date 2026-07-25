@@ -1,6 +1,8 @@
 # Recipes & menu management
 
-**User story:** US4 (Gold) · **Status:** planned
+**User story:** US4 (Gold) · **Status:** built (read-only)
+
+_As deployed:_ `/ops/menu`. Full BOM with cost, margin and the binding ingredient. The editing form is cut; recipes are configurable by SQL.
 
 **Problem it solves:** The recipe bill-of-materials is the mechanism the entire product rests on — it's
 what turns "we have 3 kg of chicken" into "you can serve 6 of these." Without a BOM editor, availability

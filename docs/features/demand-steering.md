@@ -1,6 +1,8 @@
 # Demand steering & recommendations
 
-**User story:** US5 (Platinum) · **Status:** planned
+**User story:** US5 (Platinum) · **Status:** built (partial)
+
+_As deployed:_ Scarcity demotion and ordering ship. The MARGIN term is dropped on the guest path — a guest cannot read cost, and reimplementing steer_score in SQL would be a second untested copy. Margin steering is a manager-side view.
 
 **Problem it solves:** "Personalized recommendations" from the PS — but more importantly, this is the half
 of the runway idea that no shipped POS does. Knowing a dish will 86 at 20:40 is only half useful; the

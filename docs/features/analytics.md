@@ -1,6 +1,8 @@
 # Analytics
 
-**User story:** US4 + US5 (Gold + Platinum) · **Status:** planned
+**User story:** US4 + US5 (Gold + Platinum) · **Status:** built
+
+_As deployed:_ `/ops/analytics`. Service summary + Kasavana–Smith matrix, drawn only above 30 paid orders.
 
 **Problem it solves:** "Lack of operational insights and business analytics." The bar to clear is that
 these charts answer a question an owner actually has — what lost money, what to order, where stock is

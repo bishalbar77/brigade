@@ -1,6 +1,8 @@
 # KDS — kitchen display system
 
-**User story:** US4 (Gold) · **Status:** planned
+**User story:** US4 (Gold) · **Status:** built
+
+_As deployed:_ `/ops/kds` with the runway rail. Station filtering enforced in `advance_item_status()` after patch 003 — it was UI-only before.
 
 **Problem it solves:** "Delayed communication between customers, staff, and kitchen" and "inefficient
 staff coordination." This is the screen the whole demo is built around — and per

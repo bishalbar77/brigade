@@ -1,6 +1,8 @@
 # Billing
 
-**User story:** US3 (Silver) · **Status:** planned
+**User story:** US3 (Silver) · **Status:** built
+
+_As deployed:_ `/bill/[orderId]`, simulated payment. Split billing is cut (cut-line 2).
 
 **Problem it solves:** "Manual billing management." A bill should be a derivation of what was actually
 served, not a number a server types into a calculator at the end of the meal.

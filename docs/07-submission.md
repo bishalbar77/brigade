@@ -1,21 +1,22 @@
 # 07 — Submission
 
-> **Reconcile this file against the deployed app on day 3.** Every `—` below becomes either a route or
-> the word `cut`. A compliance matrix that overclaims is worse than none.
+> **Reconciled against the deployed app.** Every claim below was checked by visiting the route, not by
+> reading the plan. An adversarial audit of the live deployment then re-checked it independently; what it
+> found is recorded under *Known defects* at the bottom rather than quietly fixed.
 
 ## PS requirements checklist
 
 | Requirement | State |
 |---|---|
-| Hosted application live and publicly accessible | ☐ |
-| GitHub repository public | ☐ |
-| README: Team Name | ☐ |
-| README: Tech Stack | ☐ |
-| README: User Stories Completed | ☐ |
-| README: AI Usage | ☐ |
-| README: Hosted Application Link | ☐ |
-| Given PPT submitted as PDF (template provided day 3) | ☐ |
-| Meaningful commit history | ☐ |
+| Hosted application live and publicly accessible | ✅ https://brigade-flame.vercel.app |
+| GitHub repository public | ⬜ push pending |
+| README: Team Name | ✅ |
+| README: Tech Stack | ✅ incl. the Express deviation, stated |
+| README: User Stories Completed | ✅ |
+| README: AI Usage | ✅ no LLM in product, stated and justified |
+| README: Hosted Application Link | ✅ |
+| Given PPT submitted as PDF (template provided day 3) | ⬜ awaiting template |
+| Meaningful commit history | ✅ 20+ commits, each stating the reasoning |
 
 ## User story compliance matrix
 
@@ -23,18 +24,18 @@
 
 | Evidence | Where | Status |
 |---|---|---|
-| Two deliberate densities, one token system | `docs/04-design-system.md` | — |
-| Guest surface, mobile-first | `/menu`, `/order/[id]` | — |
-| Ops surface, wall-screen legible | `/ops/kds` | — |
-| Accessibility floor (focus, contrast, reduced-motion, 375px) | throughout | — |
+| Two deliberate densities, one token system | `docs/04-design-system.md` | ✅ ops text now genuinely 24px |
+| Guest surface, mobile-first | `/menu`, `/order/[id]` | ✅ |
+| Ops surface, wall-screen legible | `/ops/kds` | ✅ |
+| Accessibility floor (focus, contrast, reduced-motion, 375px) | throughout | ⚠️ contrast fixed; see defects |
 
 ### US2 — Silver · authentication
 
 | Requirement | Implementation | Status |
 |---|---|---|
-| Email & password with OTP | Supabase Auth, email OTP verification | — |
-| Google OAuth | Supabase Auth provider | — |
-| Role-based access | 7 roles enforced in **Postgres RLS**, not UI conditionals | — |
+| Email & password with OTP | Supabase Auth, email OTP verification | ✅ `/auth/verify` — SMTP cap, see defects |
+| Google OAuth | Supabase Auth provider | ✅ configured for production |
+| Role-based access | 7 roles enforced in **Postgres RLS**, not UI conditionals | ✅ 43 RLS policies, 7 roles |
 
 Role model in [03-data-model.md](03-data-model.md). The claim worth making to judges: authorization is
 enforced in the database, so it can be tested by hitting the REST API directly with a guest token and
@@ -44,45 +45,45 @@ watching it refuse.
 
 | PS example | Implementation | Status |
 |---|---|---|
-| Digital menu | `/menu` | — |
-| Live item availability | `dish_availability` view + realtime | — |
-| Smart reservations | `/reserve` + queue with quoted wait | — |
-| Order management | `place_order()` atomic RPC | — |
-| Queue management | `/ops/floor`, host surface | — |
-| Billing | `/bill/[orderId]` | — |
-| Customer notifications | `notifications` table + realtime | — |
+| Digital menu | `/menu` | ✅ |
+| Live item availability | `dish_availability` view + realtime | ✅ 12s refetch + realtime accelerator |
+| Smart reservations | `/reserve` + queue with quoted wait | ✅ `/reserve` (read-only admin) |
+| Order management | `place_order()` atomic RPC | ✅ race verified on live data |
+| Queue management | `/ops/floor`, host surface | ✅ `/ops/reservations` (read-only) |
+| Billing | `/bill/[orderId]` | ✅ simulated payment |
+| Customer notifications | `notifications` table + realtime | ❌ cut — tables exist, nothing writes them |
 
 ### US4 — Gold · management dashboard
 
 | PS example | Implementation | Status |
 |---|---|---|
-| Orders | `/ops/kds`, `/ops/floor` | — |
-| Tables | `/ops/floor` | — |
-| Inventory | `/ops/inventory` | — |
-| Staff | `/ops/staff` — **cut-line item 1** | — |
-| Customers | guest history in analytics | — |
-| Sales | `/ops/analytics` | — |
-| Analytics | `/ops/analytics` | — |
+| Orders | `/ops/kds`, `/ops/floor` | ✅ |
+| Tables | `/ops/floor` | ✅ `/ops/floor` (read-only) |
+| Inventory | `/ops/inventory` | ✅ `/ops/inventory` (read-only) |
+| Staff | `/ops/staff` — **cut-line item 1** | ❌ cut (cut-line 1) |
+| Customers | guest history in analytics | ⚠️ order history only |
+| Sales | `/ops/analytics` | ✅ |
+| Analytics | `/ops/analytics` | ✅ Kasavana–Smith matrix |
 
 ### US5 — Platinum · intelligent operations
 
 | PS example | Implementation | Status |
 |---|---|---|
-| Personalized recommendations | item-item cosine similarity, availability + allergen filtered | — |
-| Inventory prediction | reorder points from consumption rate × lead time, shelf-life capped | — |
-| Demand forecasting | EWMA velocity by weekday × daypart | — |
-| Smart notifications | runway/reorder/variance triggers → `insights` | — |
-| Operational insights | Kasavana–Smith menu engineering, waste variance | — |
+| Personalized recommendations | item-item cosine similarity, availability + allergen filtered | ⚠️ engine tested, not surfaced |
+| Inventory prediction | reorder points from consumption rate × lead time, shelf-life capped | ✅ shelf-life cap included |
+| Demand forecasting | EWMA velocity by weekday × daypart | ✅ EWMA on `/ops/runway` |
+| Smart notifications | runway/reorder/variance triggers → `insights` | ❌ cut |
+| Operational insights | Kasavana–Smith menu engineering, waste variance | ✅ matrix + food-cost band |
 | AI-powered assistance | **not implemented** — deliberate, see below | n/a |
 
 ### Bonus
 
 | Feature | Status |
 |---|---|
-| Predictive 86 (runway) — the core differentiator | — |
-| Demand steering | — |
-| Waste variance from an append-only stock ledger | — |
-| Multi-tenant from the first migration | — |
+| Predictive 86 (runway) — the core differentiator | ✅ `/ops/runway` — the differentiator |
+| Demand steering | ⚠️ scarcity demotion ships; margin term dropped on the guest path |
+| Waste variance from an append-only stock ledger | ⚠️ maths tested, no UI surfaced |
+| Multi-tenant from the first migration | ✅ every table carries `restaurant_id`; tenant checks in `advance_item_status()` after patch 003 |
 
 ## How to describe the AI decision
 
@@ -142,3 +143,42 @@ Rehearse this. Two devices, two browsers, seeded data with 2–3 dishes delibera
 
 Fallback if live realtime misbehaves on venue wifi: a recorded run of the same script, referenced in
 the README.
+
+
+---
+
+## Known defects
+
+An adversarial audit of the live deployment ran across five independent lenses
+(security, correctness, accessibility, auth, rubric honesty). Each finding was then
+given to a separate agent instructed to *refute* it, defaulting to "not real" unless
+independently reproduced. **44 confirmed, 1 refuted.**
+
+Recording them here rather than quietly fixing them, because three were cases where
+this repo's own docs or commit messages claimed a guarantee that did not exist.
+
+### Fixed
+
+| Was claimed | What was actually true | Fix |
+|---|---|---|
+| "Role + station gated — a chef works their own station only" | `advance_item_status()` checked neither station NOR tenant. A host fired a grill ticket: HTTP 204 | patch 003 |
+| Contrast ≥ 4.5:1 on body text | 3 of 8 tokens failed against `bg-raised` (flame 3.78:1, ash 3.29:1, subtle 3.94:1) | tokens re-solved |
+| "Two densities" — KDS legible at 2 m | `font-size` on `body` resolved the GUEST token once; inherited ops text was 17.28px, not 24px | `[data-density]` sets its own size |
+| Predicted 86 times are correct | `restaurants.timezone` was never read; UTC server rendered London times an hour early, and near midnight loaded the wrong day's hours | `lib/runway/clock.ts` |
+| "Availability reaches the guest… counts change as other tables order" | Realtime authorises row-by-row against the subscriber's RLS, so guests got 0 events while the pill said "live" | poll-first + freshness-based pill |
+| Stock only ever mutated by `place_order()`/`adjust_stock()` | A manager could `PATCH ingredients.stock_qty` via PostgREST, writing no ledger row | column REVOKE |
+| Cost gated to owner/manager | Every staff role could read `cost_per_unit_cents`; no REVOKE existed | patch 003 |
+| Guests see ingredient names, not quantities | `recipe_items` was `using (true)` | names-only view |
+| — | `dish_binding_ingredient` leaked exact pantry stock to anonymous callers | `security_invoker` |
+| — | KDS Fire buttons unreachable at 375/414px — the rail painted over them | shrinkable grid + breakpoint |
+
+### Open, and deliberately so
+
+| Defect | Why it is acceptable for this submission |
+|---|---|
+| Built-in SMTP is rate-capped | Custom SMTP is the documented fix; the OTP path itself works. Google OAuth is the demo path |
+| No security headers (CSP, X-Frame-Options) | Vercel defaults; no user-generated HTML is rendered |
+| No password-attempt throttle | Supabase-side concern; not something this app implements |
+| `notifications`/`insights` unsurfaced | Cut honestly rather than claimed — the generators are tested, nothing writes them on a schedule |
+| Recommendations engine not surfaced | Tested in `lib/runway/steering.ts`; no UI shipped |
+| Seeded dockets open 280+ minutes late | An artefact of seeding "live" orders at a fixed time; cosmetic, and the ages are real |

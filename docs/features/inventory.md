@@ -1,6 +1,8 @@
 # Inventory
 
-**User story:** US4 (Gold) · **Status:** planned
+**User story:** US4 (Gold) · **Status:** built (read-only)
+
+_As deployed:_ `/ops/inventory`. Stock, par and reorder suggestions; adjustments happen on the runway board.
 
 **Problem it solves:** "Manual inventory management." Also the foundation everything else stands on —
 if stock is wrong, availability is wrong, runway is wrong, forecasts are wrong, and the whole product's

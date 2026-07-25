@@ -1,6 +1,8 @@
 # Notifications
 
-**User story:** US3 + US5 (Silver + Platinum) · **Status:** planned
+**User story:** US3 + US5 (Silver + Platinum) · **Status:** cut
+
+_As deployed:_ The `insights`/`notifications` tables and the generators exist and are tested, but nothing writes them on a schedule and no UI surfaces them. Cut honestly rather than claimed.
 
 **Problem it solves:** "Delayed communication between customers, staff, and kitchen" on the guest side,
 and "smart notifications" on the Platinum side. The *smart* part is that staff alerts are predictive —

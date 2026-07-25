@@ -1,6 +1,8 @@
 # Reservations & walk-in queue
 
-**User story:** US3 (Silver) · **Status:** planned
+**User story:** US3 (Silver) · **Status:** built (read-only)
+
+_As deployed:_ `/ops/reservations` + `/reserve`. Turn-time medians shown; seating and no-show actions are not wired.
 
 **Problem it solves:** "Long waiting times for tables." The PS asks for "smart reservations" and "queue
 management" — the *smart* part being that a quoted wait should come from how long tables actually take

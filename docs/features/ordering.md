@@ -1,6 +1,8 @@
 # Ordering
 
-**User story:** US3 (Silver) · **Status:** planned
+**User story:** US3 (Silver) · **Status:** built
+
+_As deployed:_ `/cart` → `place_order()`. The last-portion race is verified on live data: two concurrent orders, exactly one winner.
 
 **Problem it solves:** "Manual order management" and "long waiting times for orders." Also the single
 hardest correctness problem in the product: two guests must not both be sold the last portion.

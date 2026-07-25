@@ -1,6 +1,8 @@
 # Digital menu
 
-**User story:** US3 (Silver) · **Status:** planned
+**User story:** US3 (Silver) · **Status:** built
+
+_As deployed:_ `/menu`. Live availability via a 12s refetch of `menu_public` plus a realtime accelerator; allergen filtering is a hard exclusion.
 
 **Problem it solves:** Two PS challenges at once — "customers waiting to know whether dishes are
 available" and "limited visibility into menu items and restaurant services." This is the surface where

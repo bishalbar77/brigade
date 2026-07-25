@@ -1,6 +1,8 @@
 # Auth
 
-**User story:** US2 (Silver) · **Status:** planned
+**User story:** US2 (Silver) · **Status:** built
+
+_As deployed:_ `/auth/sign-in` `/auth/sign-up` `/auth/verify` `/auth/callback`. OTP path works but the project's built-in SMTP is rate-capped — see the note in 07-submission.md.
 
 **Problem it solves:** Every other feature needs to know who is asking and what they're allowed to do.
 The PS asks for email+password with OTP, Google OAuth, and role-based access — and role-based access is

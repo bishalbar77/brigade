@@ -1,6 +1,8 @@
 # Order tracking
 
-**User story:** US3 (Silver) · **Status:** planned
+**User story:** US3 (Silver) · **Status:** built
+
+_As deployed:_ `/order/[id]`, per-item rail, live.
 
 **Problem it solves:** "Delayed communication between customers, staff, and kitchen" and "long waiting
 times for orders." A guest who can see their food's progress stops asking the server, which removes a

@@ -1,6 +1,8 @@
 # Staff management
 
-**User story:** US4 (Gold) · **Status:** planned — **cut-line item 1**
+**User story:** US4 (Gold) · **Status:** cut — **cut-line item 1**
+
+_As deployed:_ Cut-line 1, as planned. Staff exist via the seed with documented logins; role changes are SQL.
 
 **Problem it solves:** US4 lists "Staff" as one of seven dashboard examples. Roster management and shift
 scheduling are what a restaurant actually needs here.

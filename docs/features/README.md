@@ -1,25 +1,26 @@
 # Feature docs — index
 
-One file per feature, all on the same template. **`Status` must match the deployed app** — see
-[../07-submission.md](../07-submission.md). Update these on day 3, not optimistically.
+One file per feature, all on the same template. **`Status` matches the deployed app** — reconciled
+against the live routes after an adversarial audit, not filled in optimistically. Each doc also carries
+an `_As deployed:_` line stating what actually shipped versus what the doc originally planned.
 
 | Feature | US | Level | Status | Cut priority |
 |---|---|---|---|---|
-| [auth.md](auth.md) | US2 | Silver | planned | never |
-| [digital-menu.md](digital-menu.md) | US3 | Silver | planned | never |
-| [ordering.md](ordering.md) | US3 | Silver | planned | never |
-| [order-tracking.md](order-tracking.md) | US3 | Silver | planned | keep |
-| [reservations-queue.md](reservations-queue.md) | US3 | Silver | planned | keep |
-| [billing.md](billing.md) | US3 | Silver | planned | split billing = **2** |
-| [kds.md](kds.md) | US4 | Gold | planned | **never — this is the demo** |
-| [floor-map.md](floor-map.md) | US4 | Gold | planned | keep |
-| [inventory.md](inventory.md) | US4 | Gold | planned | variance = **4** |
-| [recipes.md](recipes.md) | US4 | Gold | planned | modifiers = **5** |
-| [analytics.md](analytics.md) | US4+5 | Gold+ | planned | keep matrix |
-| [staff.md](staff.md) | US4 | Gold | planned | **1 — first to go** |
-| [runway-board.md](runway-board.md) | US5 | Platinum | planned | **never — the differentiator** |
-| [demand-steering.md](demand-steering.md) | US5 | Platinum | planned | degrade to manual sort |
-| [notifications.md](notifications.md) | US3+5 | Silver+ | planned | email first |
+| [auth.md](auth.md) | US2 | Silver | built | never |
+| [digital-menu.md](digital-menu.md) | US3 | Silver | built | never |
+| [ordering.md](ordering.md) | US3 | Silver | built | never |
+| [order-tracking.md](order-tracking.md) | US3 | Silver | built | keep |
+| [reservations-queue.md](reservations-queue.md) | US3 | Silver | built (read-only) | keep |
+| [billing.md](billing.md) | US3 | Silver | built | split billing = **2** |
+| [kds.md](kds.md) | US4 | Gold | built | **never — this is the demo** |
+| [floor-map.md](floor-map.md) | US4 | Gold | built (read-only) | keep |
+| [inventory.md](inventory.md) | US4 | Gold | built (read-only) | variance = **4** |
+| [recipes.md](recipes.md) | US4 | Gold | built (read-only) | modifiers = **5** |
+| [analytics.md](analytics.md) | US4+5 | Gold+ | built | keep matrix |
+| [staff.md](staff.md) | US4 | Gold | cut | **1 — first to go** |
+| [runway-board.md](runway-board.md) | US5 | Platinum | built | **never — the differentiator** |
+| [demand-steering.md](demand-steering.md) | US5 | Platinum | built (partial) | degrade to manual sort |
+| [notifications.md](notifications.md) | US3+5 | Silver+ | cut | email first |
 
 ## Template
 

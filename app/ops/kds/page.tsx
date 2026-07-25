@@ -55,8 +55,8 @@ export default async function KdsPage({
   ).length;
 
   return (
-    <div style={{ display: "flex", alignItems: "stretch", minHeight: "70vh" }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
+    <div className="kds-layout">
+      <div className="kds-board">
         <header
           style={{
             display: "flex",

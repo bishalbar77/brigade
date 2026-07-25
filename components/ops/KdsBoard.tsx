@@ -68,14 +68,7 @@ export function KdsBoard({
 
   return (
     <>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(19rem, 1fr))",
-          gap: "var(--space-3)",
-          alignItems: "start",
-        }}
-      >
+      <div className="kds-dockets">
         {dockets.map((docket) => (
           <Docket key={docket.orderId} docket={docket} now={now} />
         ))}

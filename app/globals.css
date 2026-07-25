@@ -131,6 +131,22 @@
     -webkit-text-size-adjust: 100%;
   }
 
+  /*
+   * The density element sets its OWN font-size — this is load-bearing, not tidiness.
+   *
+   * font-size used to live only on `body`, where `var(--text-step-0)` resolved once
+   * against the GUEST value. Re-declaring the variable on a descendant
+   * [data-density="ops"] does not re-resolve an ancestor's computed font-size, so all
+   * inherited text on the KDS silently stayed at the guest size: 1.08rem = 17.28px,
+   * not the 24px the whole "legible at 2m" claim depends on. Only elements that named
+   * the token inline got the larger value, which is why it looked half-right.
+   *
+   * Declaring it here means each subtree resolves the token it actually redefines.
+   */
+  [data-density] {
+    font-size: var(--text-step-0);
+  }
+
   body {
     background-color: var(--color-bg);
     /* Atmosphere, not decoration: one soft warm wash from above, like room
@@ -183,6 +199,54 @@
   [data-density="guest"] button,
   [data-density="guest"] a[role="button"] {
     min-height: 44px;
+  }
+}
+
+/*
+ * ── KDS layout ───────────────────────────────────────────────────────────────
+ *
+ * Needs real CSS rather than inline styles because it needs a media query.
+ *
+ * The rail was `min-width: 17rem` beside a docket grid whose columns were
+ * `minmax(19rem, 1fr)`. A minmax FLOOR of 19rem cannot shrink, so at 375–414px the
+ * grid overflowed its flex parent and the rail painted over the Fire/Cooking buttons —
+ * the primary action on the primary screen, unreachable on a phone.
+ *
+ * Two fixes, both needed: let the columns shrink below their preferred width, and
+ * stack the rail underneath once there isn't room beside it.
+ */
+.kds-layout {
+  display: flex;
+  align-items: stretch;
+  min-height: 70vh;
+}
+
+.kds-board {
+  flex: 1;
+  min-width: 0; /* without this a flex child refuses to shrink below its content */
+}
+
+.kds-dockets {
+  display: grid;
+  /* min() lets a column shrink under 19rem instead of forcing overflow. */
+  grid-template-columns: repeat(auto-fill, minmax(min(19rem, 100%), 1fr));
+  gap: var(--space-3);
+  align-items: start;
+}
+
+.kds-rail {
+  flex: 0 0 17rem;
+  border-left: 2px solid var(--color-border-strong);
+}
+
+@media (max-width: 900px) {
+  .kds-layout {
+    flex-direction: column;
+  }
+  .kds-rail {
+    flex: none;
+    border-left: none;
+    border-top: 2px solid var(--color-border-strong);
   }
 }
 

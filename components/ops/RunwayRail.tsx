@@ -22,14 +22,13 @@ export function RunwayRail({ rows }: { rows: RunwayRow[] }) {
   return (
     <aside
       aria-label="What's about to run out"
+      className="kds-rail"
       style={{
         display: "flex",
         flexDirection: "column",
         gap: "var(--space-3)",
         padding: "var(--space-4)",
         background: "var(--color-bg-sunken)",
-        borderLeft: "2px solid var(--color-border-strong)",
-        minWidth: "17rem",
       }}
     >
       <h2

@@ -887,8 +887,19 @@ async function main() {
       // nothing in the app linked to it, so "Add to order" put a dish somewhere the
       // diner could not find. Requesting a URL is not the same as offering a route to it.
       const menu = await app("/menu", { session: S.priya });
-      ok("the menu offers a way to the cart", /href="\/cart"/.test(menu.text),
-        /href="\/cart"/.test(menu.text) ? "the header links to it" : "NOTHING links to /cart");
+      const cartLinks = (menu.text.match(/href="\/cart"/g) ?? []).length;
+      ok("the menu offers a way to the cart", cartLinks > 0,
+        cartLinks ? `${cartLinks} link(s) to it` : "NOTHING links to /cart");
+
+      // On a phone the nav collapses behind a button. The cart must NOT be in there: it
+      // is the action a diner is mid-way through, and it spent this build unreachable
+      // already. Two links = one in the wide row, one in the narrow row, both outside
+      // the collapsible panel.
+      ok("the phone header collapses the nav but keeps the cart out of it",
+        /nav-narrow/.test(menu.text) && /nav-wide/.test(menu.text) && cartLinks >= 2,
+        `wide + narrow rows present, cart in ${cartLinks} of them`);
+      ok("the collapse button is announced as a menu, not an unlabelled button",
+        /aria-expanded="false"/.test(menu.text) && /aria-controls="guest-nav-panel"/.test(menu.text));
 
       const dish = S.menu[0] ? await app(`/menu/${S.menu[0].id}`, { session: S.priya }) : { text: "" };
       ok("and a dish page offers a way to add to it", /Add to order/i.test(dish.text));

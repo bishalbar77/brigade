@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { AccountBar } from "@/components/AccountBar";
-import { CartLink } from "@/components/guest/CartLink";
+import { GuestNav } from "@/components/guest/GuestNav";
 import { getCurrentProfile } from "@/lib/supabase/server";
 
 /*
@@ -50,22 +49,7 @@ export default async function GuestLayout({ children }: { children: React.ReactN
           Brigade
         </Link>
 
-        <nav style={{ display: "flex", alignItems: "center", gap: "var(--space-4)" }}>
-          <Link
-            href="/menu"
-            style={{ color: "var(--color-fg-muted)", textDecoration: "none" }}
-          >
-            Menu
-          </Link>
-          <Link
-            href="/reserve"
-            style={{ color: "var(--color-fg-muted)", textDecoration: "none" }}
-          >
-            Book
-          </Link>
-          <CartLink />
-          <AccountBar name={profile?.full_name as string | null} variant="guest" />
-        </nav>
+        <GuestNav name={profile?.full_name as string | null} />
       </header>
 
       <main style={{ flex: 1, width: "100%", maxWidth: "40rem", margin: "0 auto" }}>

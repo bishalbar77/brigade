@@ -67,6 +67,13 @@ Bands drive the UI (see [04-design-system.md](04-design-system.md)):
 `portions ≤ 3` is in the critical test on purpose: at low absolute counts the ratio is noisy, and "3
 left" matters to a guest regardless of what the rate says.
 
+**Band is not urgency.** The runway board sorts by *predicted time*, never by band — conflating the
+two mis-orders it. Real seeded data made this obvious: a 3-portion dish is forced critical by the rule
+above while a 4-portion dish actually 86s 73 minutes sooner, so band-ordering buried the dish the
+kitchen needed first. The band is a scarcity signal worth showing a guest; it is not a claim about
+what to deal with first. `byUrgency` tiers as: already out → has a prediction (soonest first) → finite
+but unpredictable (fewest portions first) → unlimited.
+
 **Outside service hours** velocity is 0 and runway is undefined — show portions, suppress the
 countdown. A board predicting an 86 at 04:00 destroys trust in the number.
 

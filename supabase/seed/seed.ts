@@ -177,8 +177,39 @@ async function reset(): Promise<void> {
     .from("restaurants").select("id").eq("slug", RESTAURANT_SLUG).maybeSingle();
 
   if (existing) {
-    // ON DELETE CASCADE clears everything hanging off the restaurant.
-    await db.from("restaurants").delete().eq("id", existing.id);
+    // Deleting the restaurant does NOT cascade cleanly on its own. Two FKs are
+    // ON DELETE RESTRICT by design — recipe_items.ingredient_id and
+    // order_items.dish_id — so when the restaurant cascade reaches ingredients or
+    // dishes before it reaches their dependents, the restrict fires and the whole
+    // delete is refused. Postgres doesn't guarantee cascade ordering between
+    // sibling paths, which is why this looked intermittent.
+    //
+    // So clear the restricting children explicitly, in dependency order, first.
+    // (The constraints are also being changed to NO ACTION DEFERRABLE — see
+    // supabase/patches/001_fk_deferrable.sql — after which this becomes belt and
+    // braces rather than load-bearing.)
+    const { error: ordersErr } = await db
+      .from("orders").delete().eq("restaurant_id", existing.id);
+    if (ordersErr) throw new Error(`reset orders: ${ordersErr.message}`);
+
+    const { data: dishRows } = await db
+      .from("dishes").select("id").eq("restaurant_id", existing.id);
+    const dishIds = (dishRows ?? []).map((d) => d.id);
+    if (dishIds.length) {
+      const { error: recipeErr } = await db
+        .from("recipe_items").delete().in("dish_id", dishIds);
+      if (recipeErr) throw new Error(`reset recipe_items: ${recipeErr.message}`);
+    }
+
+    const { error: delErr } = await db.from("restaurants").delete().eq("id", existing.id);
+    if (delErr) throw new Error(`reset restaurant: ${delErr.message}`);
+
+    // Verify rather than trust: a silently-failed delete here is what produced a
+    // confusing "duplicate key on slug" three steps later.
+    const { data: stillThere } = await db
+      .from("restaurants").select("id").eq("slug", RESTAURANT_SLUG).maybeSingle();
+    if (stillThere) throw new Error("reset: restaurant still present after delete");
+
     console.log("  cleared previous demo restaurant");
   }
 
@@ -310,10 +341,13 @@ async function main(): Promise<void> {
 
     // covers for the day, with a little week-to-week noise
     const covers = Math.max(8, Math.round(jitter(COVERS_BY_WEEKDAY[weekday]!, 0.18)));
-    // dinner carries ~65% of covers on days with two services
+    // Dinner carries most covers. Sunday skews to lunch (the roast) but still runs an
+    // early evening service — it needs (sunday, dinner) velocity rows, and 26 July is
+    // a demo day.
     const services: { startHour: number; share: number }[] =
-      weekday === 0 ? [{ startHour: 12, share: 1 }]
-                    : [{ startHour: 12, share: 0.35 }, { startHour: 18, share: 0.65 }];
+      weekday === 0
+        ? [{ startHour: 12, share: 0.62 }, { startHour: 17, share: 0.38 }]
+        : [{ startHour: 12, share: 0.35 }, { startHour: 18, share: 0.65 }];
 
     for (const service of services) {
       const serviceCovers = Math.round(covers * service.share);
@@ -471,7 +505,6 @@ async function main(): Promise<void> {
     const dishId = dishIds.get(dish.name)!;
     for (let weekday = 0; weekday < 7; weekday++) {
       for (const daypart of ["lunch", "dinner"]) {
-        if (weekday === 0 && daypart === "dinner") continue; // closed Sunday evening
         const sold = itemsByOrder.filter((i) => {
           if (i.dish.name !== dish.name) return false;
           if (i.firedAt.getDay() !== weekday) return false;

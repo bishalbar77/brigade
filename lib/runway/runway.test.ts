@@ -291,15 +291,54 @@ describe("computeRunway", () => {
 });
 
 describe("byUrgency", () => {
-  it("sorts out → critical → low → plenty", () => {
-    const mk = (band: RunwayResult["band"], minutes: number | null): RunwayResult => ({
-      dishId: band, portions: 5, runwayMinutes: minutes, predicted86At: null,
-      band, unlimited: false, insufficientHistory: false, bindingIngredientId: null,
-    });
-    const sorted = [mk("plenty", 300), mk("out", null), mk("low", 90), mk("critical", 20)]
-      .sort(byUrgency)
-      .map((r) => r.band);
-    expect(sorted).toEqual(["out", "critical", "low", "plenty"]);
+  const mk = (
+    dishId: string,
+    portions: number,
+    minutes: number | null,
+    over: Partial<RunwayResult> = {},
+  ): RunwayResult => ({
+    dishId, portions, runwayMinutes: minutes, predicted86At: null,
+    band: bandFor(portions, minutes), unlimited: false,
+    insufficientHistory: false, bindingIngredientId: null, ...over,
+  });
+
+  it("puts already-86'd dishes first", () => {
+    const sorted = [mk("plenty", 40, 300), mk("out", 0, null)].sort(byUrgency);
+    expect(sorted[0]!.dishId).toBe("out");
+  });
+
+  it("orders by predicted time, NOT by band", () => {
+    // The real-data case this was written for: a 3-portion dish is forced to the
+    // critical band, but a 4-portion dish actually runs out 73 minutes sooner.
+    // Sorting by band buried the more urgent dish.
+    const scallops = mk("scallops", 3, 173);   // critical, via portions <= 3
+    const seabass = mk("seabass", 4, 100);     // low
+    expect(scallops.band).toBe("critical");
+    expect(seabass.band).toBe("low");
+    expect([scallops, seabass].sort(byUrgency).map((r) => r.dishId)).toEqual([
+      "seabass", "scallops",
+    ]);
+  });
+
+  it("ranks predicted dishes above unpredictable ones", () => {
+    const predicted = mk("predicted", 20, 400);
+    const closed = mk("closed", 2, null);      // finite but no prediction
+    expect([closed, predicted].sort(byUrgency).map((r) => r.dishId)).toEqual([
+      "predicted", "closed",
+    ]);
+  });
+
+  it("puts unlimited dishes last", () => {
+    const unlimited = mk("unlimited", UNLIMITED, null, { unlimited: true });
+    const closed = mk("closed", 5, null);
+    expect([unlimited, closed].sort(byUrgency).map((r) => r.dishId)).toEqual([
+      "closed", "unlimited",
+    ]);
+  });
+
+  it("breaks ties among unpredictable dishes by fewest portions", () => {
+    const sorted = [mk("many", 30, null), mk("few", 2, null)].sort(byUrgency);
+    expect(sorted.map((r) => r.dishId)).toEqual(["few", "many"]);
   });
 });
 

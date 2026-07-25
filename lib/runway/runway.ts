@@ -100,14 +100,34 @@ export function computeRunway(input: RunwayInput): RunwayResult {
   };
 }
 
-/** Sort for the runway board: soonest to 86 first. */
+/**
+ * Sort for the runway board: soonest to 86 first.
+ *
+ * Sorts by PREDICTED TIME, not by band. Band and urgency are different things, and
+ * conflating them mis-orders the board — which real seeded data made obvious:
+ *
+ *   scallops  3 portions, 86s in 173 min  → critical (forced by portions <= 3)
+ *   sea bass  4 portions, 86s in 100 min  → low
+ *
+ * Ranking by band put the scallops on top, burying the dish that actually runs out
+ * 73 minutes sooner. The band is a scarcity signal worth showing a guest ("3 left");
+ * it is not a claim about what the kitchen should deal with first.
+ *
+ * Tiers: already out → has a prediction (soonest first) → no prediction (fewest
+ * portions first) → unlimited.
+ */
 export function byUrgency(a: RunwayResult, b: RunwayResult): number {
-  const rank: Record<RunwayBand, number> = { out: 0, critical: 1, low: 2, plenty: 3 };
-  if (rank[a.band] !== rank[b.band]) return rank[a.band] - rank[b.band];
+  const tier = (r: RunwayResult): number => {
+    if (r.portions <= 0) return 0;            // already 86'd — the kitchen must know
+    if (r.runwayMinutes !== null) return 1;   // predicted
+    if (!r.unlimited) return 2;               // finite but unpredictable (closed / thin history)
+    return 3;                                 // unlimited
+  };
 
-  // within a band, the one with an actual prediction and less time left comes first
-  if (a.runwayMinutes !== null && b.runwayMinutes !== null) return a.runwayMinutes - b.runwayMinutes;
-  if (a.runwayMinutes !== null) return -1;
-  if (b.runwayMinutes !== null) return 1;
+  const ta = tier(a);
+  const tb = tier(b);
+  if (ta !== tb) return ta - tb;
+
+  if (ta === 1) return a.runwayMinutes! - b.runwayMinutes!;
   return a.portions - b.portions;
 }

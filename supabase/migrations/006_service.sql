@@ -76,7 +76,11 @@ create unique index orders_one_open_per_table on orders (table_id)
 create table order_items (
   id               uuid primary key default gen_random_uuid(),
   order_id         uuid not null references orders on delete cascade,
-  dish_id          uuid not null references dishes on delete restrict,
+  -- NO ACTION DEFERRABLE for the same reason as recipe_items.ingredient_id: still
+  -- refuses to orphan a historical line by deleting a dish (archive, never delete),
+  -- but deferring the check lets a whole-restaurant cascade resolve.
+  dish_id          uuid not null references dishes
+                     on delete no action deferrable initially deferred,
   qty              int  not null check (qty > 0),
   -- captured at order time, never re-joined to dishes.price_cents:
   -- a bill must not change because someone edited a price afterwards

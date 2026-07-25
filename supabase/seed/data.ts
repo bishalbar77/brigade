@@ -231,15 +231,29 @@ export const GUESTS = [
 
 export const DEMO_PASSWORD = "brigade-demo-2026";
 
-/** Service windows. Lunch is quieter than dinner, weekends busier than weekdays. */
+/**
+ * Service windows. Lunch is quieter than dinner, weekends busier than weekdays.
+ *
+ * Continuous all-day service (no gap between lunch and dinner) for a demo-practical
+ * reason: outside service hours the runway engine correctly suppresses predictions,
+ * so a gap at 16:00 means a judge presenting mid-afternoon sees portion counts with
+ * no predicted 86 times — the whole point of the board. All-day dining is perfectly
+ * plausible, and this way the board is live whenever it's shown.
+ *
+ * The 16:00 boundary is load-bearing: it must match the lunch/dinner split the
+ * velocity aggregation uses (h < 16 ? lunch : dinner), or a daypart ends up with no
+ * velocity rows and every dish reports insufficientHistory.
+ */
 export const SERVICE_HOURS = {
-  mon: [["12:00", "15:00"], ["18:00", "22:30"]],
-  tue: [["12:00", "15:00"], ["18:00", "22:30"]],
-  wed: [["12:00", "15:00"], ["18:00", "22:30"]],
-  thu: [["12:00", "15:00"], ["18:00", "22:30"]],
-  fri: [["12:00", "15:00"], ["18:00", "23:00"]],
-  sat: [["12:00", "15:30"], ["17:30", "23:00"]],
-  sun: [["12:00", "16:00"]],
+  mon: [["11:00", "16:00"], ["16:00", "22:30"]],
+  tue: [["11:00", "16:00"], ["16:00", "22:30"]],
+  wed: [["11:00", "16:00"], ["16:00", "22:30"]],
+  thu: [["11:00", "16:00"], ["16:00", "22:30"]],
+  fri: [["11:00", "16:00"], ["16:00", "23:00"]],
+  sat: [["11:00", "16:00"], ["16:00", "23:00"]],
+  // Sunday now has an evening service too. It previously ran lunch only, which meant
+  // no (sunday, dinner) velocity rows at all — and 26 July is a demo day.
+  sun: [["11:00", "16:00"], ["16:00", "21:30"]],
 };
 
 /** Covers by weekday (0 = Sunday). Shapes the whole history. */

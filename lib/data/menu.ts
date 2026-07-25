@@ -179,6 +179,38 @@ export async function getMenuWithRunway(now: Date = new Date()): Promise<MenuPay
 }
 
 /**
+ * One dish, plus the ingredient NAMES that go into it.
+ *
+ * Names only — never `recipe_items.qty` and never cost. The quantities are the
+ * recipe, and the recipe is the restaurant's; the names are useful transparency for
+ * someone deciding what to eat.
+ */
+export async function getDishDetail(
+  dishId: string,
+  now: Date = new Date(),
+): Promise<{ dish: MenuDish; ingredientNames: string[] } | null> {
+  const menu = await getMenuWithRunway(now);
+  const dish = menu.dishes.find((d) => d.id === dishId);
+  if (!dish) return null;
+
+  const supabase = await createSupabaseServerClient();
+  const { data } = await supabase
+    .from("recipe_items")
+    .select("ingredients ( name )")
+    .eq("dish_id", dishId);
+
+  const ingredientNames = (data ?? [])
+    .map((row) => {
+      const rel = row.ingredients as { name: string } | { name: string }[] | null;
+      if (rel == null) return null;
+      return Array.isArray(rel) ? (rel[0]?.name ?? null) : rel.name;
+    })
+    .filter((n): n is string => Boolean(n));
+
+  return { dish, ingredientNames };
+}
+
+/**
  * Ordering for the guest browse rail.
  *
  * NOTE ON A DELIBERATE DEVIATION FROM docs/05-runway-engine.md §6.

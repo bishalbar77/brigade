@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "sql:bundle": "node scripts/bundle-sql.mjs",
-    "seed": "tsx supabase/seed/seed.ts"
+    "seed": "tsx --env-file=.env.local supabase/seed/seed.ts",
+    "verify:data": "tsx --env-file=.env.local scripts/verify-data.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
@@ -28,10 +29,12 @@
     "@types/node": "^22.10.5",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
+    "@types/ws": "^8.18.1",
     "tailwindcss": "^4.0.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
+    "vitest": "^2.1.8",
+    "ws": "^8.21.1"
   },
   "engines": {
     "node": ">=20.0.0"

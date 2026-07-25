@@ -16,7 +16,7 @@
 --   09. 009_functions.sql
 --   10. 010_rls.sql
 --   11. 010b_column_grants.sql
---   12. 011_realtime.sql
+--   12. 0xx11_realtime.sql
 
 begin;
 

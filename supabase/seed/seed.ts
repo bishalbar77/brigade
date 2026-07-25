@@ -11,7 +11,8 @@
  *
  *   npm run seed
  */
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
+import ws from "ws";
 import {
   CATEGORIES, COVERS_BY_WEEKDAY, DEMO_PASSWORD, DISHES, GUESTS, INGREDIENTS,
   SERVICE_HOURS, STAFF, SUPPLIERS, TABLES, type SeedDish,
@@ -31,7 +32,111 @@ if (!url || !serviceKey) {
   process.exit(1);
 }
 
-const db = createClient(url, serviceKey, { auth: { persistSession: false } });
+const db = createClient(url, serviceKey, {
+  auth: { persistSession: false },
+  // supabase-js constructs a RealtimeClient in its constructor, and native
+  // WebSocket only exists from Node 22. This script never opens a channel, but the
+  // client is built regardless — so hand it a transport rather than require Node 22.
+  realtime: { transport: ws as never },
+});
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Auth admin calls: raw fetch, with retry on one specific server-side flake.
+ *
+ * Measured on this project: an `sb_secret_` key is rejected on ~30% of requests to
+ * /auth/v1/admin/* with 403 `bad_jwt` ("unrecognized JWT kid <nil> for algorithm
+ * ES256"), and accepted on the rest — same key, same request, same process. That is
+ * inconsistent key handling across GoTrue instances behind the load balancer, not
+ * anything we control.
+ *
+ * Two notes on scope:
+ *  - The PUBLISHABLE key was measured at 0/10 rejections on user-facing auth
+ *    (sign-in, signup, OTP), so this affects seeding only — never the live app.
+ *  - A legacy `service_role` JWT (eyJ...) is HS256 and verified consistently by
+ *    every instance, so it avoids this entirely. See docs/08-runbook.md.
+ *
+ * Retry is deliberately narrow: only on bad_jwt. Genuine errors (validation,
+ * duplicate email) must still fail fast rather than be retried 6 times.
+ */
+async function authAdmin<T>(path: string, init?: RequestInit, attempts = 6): Promise<T> {
+  let last = "";
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    const res = await fetch(`${url}/auth/v1/admin${path}`, {
+      ...init,
+      headers: {
+        apikey: serviceKey!,
+        Authorization: `Bearer ${serviceKey}`,
+        "Content-Type": "application/json",
+        ...(init?.headers ?? {}),
+      },
+    });
+    const text = await res.text();
+
+    if (res.ok) return (text ? JSON.parse(text) : null) as T;
+
+    last = `${res.status}: ${text.slice(0, 160)}`;
+    if (text.includes("bad_jwt") && attempt < attempts) {
+      await sleep(120 * attempt);
+      continue;
+    }
+    throw new Error(`auth ${path} → ${last}`);
+  }
+  throw new Error(`auth ${path} → gave up after ${attempts} attempts. Last: ${last}`);
+}
+
+interface AuthUser {
+  id: string;
+  email?: string;
+}
+
+const listUsers = () =>
+  authAdmin<{ users: AuthUser[] }>("/users?per_page=200").then((r) => r.users ?? []);
+
+const createUser = (email: string, password: string, fullName: string) =>
+  authAdmin<AuthUser>("/users", {
+    method: "POST",
+    body: JSON.stringify({
+      email,
+      password,
+      // pre-confirmed so place_order()'s verified-email check passes for demo logins
+      email_confirm: true,
+      user_metadata: { full_name: fullName },
+    }),
+  });
+
+/**
+ * Reuse an existing demo user, or create one.
+ *
+ * Deliberately never DELETEs. On this project an `sb_secret_` key is accepted for
+ * GET and POST on /auth/v1/admin/users but returns 403 bad_jwt on DELETE — user
+ * deletion appears to want a legacy service_role JWT. Reusing identities is both
+ * the lower-privilege path and the more sensible one: a user is a stable identity,
+ * and all the domain data is cleared by the restaurant cascade anyway.
+ */
+async function ensureUser(
+  email: string,
+  fullName: string,
+  existing: ReadonlyMap<string, string>,
+): Promise<string> {
+  const found = existing.get(email);
+  if (found) return found;
+
+  try {
+    const created = await createUser(email, DEMO_PASSWORD, fullName);
+    if (!created?.id) throw new Error(`user ${email}: no id returned`);
+    return created.id;
+  } catch (err) {
+    // Belt and braces: if the address already exists (a earlier partial run, or a
+    // create that succeeded with a lost response), adopt it rather than failing.
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!/already|exists|registered/i.test(msg)) throw err;
+    const again = (await listUsers()).find((u) => u.email === email);
+    if (!again) throw err;
+    return again.id;
+  }
+}
 
 // ---------------------------------------------------------------- utilities
 
@@ -77,15 +182,9 @@ async function reset(): Promise<void> {
     console.log("  cleared previous demo restaurant");
   }
 
-  // Auth users are not cascaded from restaurants; remove them by email.
-  const { data: users } = await db.auth.admin.listUsers({ page: 1, perPage: 200 });
-  const demoEmails = new Set<string>([
-    ...STAFF.map((s) => s.email),
-    ...GUESTS.map((g) => g.email),
-  ]);
-  for (const u of users?.users ?? []) {
-    if (u.email && demoEmails.has(u.email)) await db.auth.admin.deleteUser(u.id);
-  }
+  // Auth users are intentionally NOT deleted — see ensureUser(). Deleting the
+  // restaurant already nulled their restaurant_id via ON DELETE SET NULL, and the
+  // role/station assignment below sets them correctly again.
 }
 
 // ------------------------------------------------------------------- main
@@ -106,15 +205,16 @@ async function main(): Promise<void> {
   const restaurantId = restaurant.id;
   console.log("  restaurant");
 
-  // ---- users. email_confirm: true so place_order()'s verified-email check passes.
+  // ---- users: reuse if they already exist, create if not
+  const existingByEmail = new Map(
+    (await listUsers()).filter((u) => u.email).map((u) => [u.email!, u.id] as const),
+  );
   const userIds = new Map<string, string>();
+  let created = 0;
   for (const person of [...STAFF, ...GUESTS]) {
-    const { data, error } = await db.auth.admin.createUser({
-      email: person.email, password: DEMO_PASSWORD, email_confirm: true,
-      user_metadata: { full_name: person.name },
-    });
-    if (error || !data.user) throw new Error(`user ${person.email}: ${error?.message}`);
-    userIds.set(person.email, data.user.id);
+    const before = existingByEmail.has(person.email);
+    userIds.set(person.email, await ensureUser(person.email, person.name, existingByEmail));
+    if (!before) created++;
   }
 
   // The handle_new_user trigger created each profile as a guest; assign real roles.
@@ -128,7 +228,10 @@ async function main(): Promise<void> {
     await db.from("profiles").update({ full_name: g.name, allergens: g.allergens })
       .eq("id", userIds.get(g.email)!);
   }
-  console.log(`  ${STAFF.length} staff + ${GUESTS.length} guests`);
+  console.log(
+    `  ${STAFF.length} staff + ${GUESTS.length} guests ` +
+      `(${created} created, ${STAFF.length + GUESTS.length - created} reused)`,
+  );
 
   // ---- suppliers
   const { data: suppliers } = await db.from("suppliers").insert(

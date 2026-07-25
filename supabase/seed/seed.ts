@@ -1,0 +1,452 @@
+/**
+ * Seed six weeks of plausible service history.
+ *
+ * This is NOT optional scaffolding. The whole Platinum layer is statistical: EWMA
+ * velocity over an empty table forecasts nothing, and analytics built on three days
+ * of hackathon data looks broken to a judge. Everything the runway board, the
+ * forecast, and the menu-engineering matrix show comes from what this script writes.
+ *
+ * Idempotent: wipes and rebuilds the demo restaurant. Uses the service-role key,
+ * which bypasses RLS — that is why it runs as a script and never as app code.
+ *
+ *   npm run seed
+ */
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import {
+  CATEGORIES, COVERS_BY_WEEKDAY, DEMO_PASSWORD, DISHES, GUESTS, INGREDIENTS,
+  SERVICE_HOURS, STAFF, SUPPLIERS, TABLES, type SeedDish,
+} from "./data";
+
+const WEEKS_OF_HISTORY = 6;
+const RESTAURANT_SLUG = "brigade-demo";
+
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!url || !serviceKey) {
+  console.error(
+    "Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.\n" +
+    "Copy .env.example to .env.local and fill both from the Supabase dashboard.",
+  );
+  process.exit(1);
+}
+
+const db = createClient(url, serviceKey, { auth: { persistSession: false } });
+
+// ---------------------------------------------------------------- utilities
+
+/** Seeded PRNG so a reseed produces the same history — reproducible demos. */
+let seed = 20260725;
+function rand(): number {
+  seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+  return seed / 0x7fffffff;
+}
+function randInt(min: number, max: number): number {
+  return Math.floor(rand() * (max - min + 1)) + min;
+}
+function jitter(value: number, pct: number): number {
+  return value * (1 + (rand() * 2 - 1) * pct);
+}
+
+/** Pick a dish by relative sales weight, so popularity is genuinely uneven. */
+function weightedPick(dishes: SeedDish[], totalWeight: number): SeedDish {
+  let r = rand() * totalWeight;
+  for (const d of dishes) {
+    r -= d.weight;
+    if (r <= 0) return d;
+  }
+  return dishes[dishes.length - 1]!;
+}
+
+async function chunkInsert(table: string, rows: unknown[], size = 500) {
+  for (let i = 0; i < rows.length; i += size) {
+    const { error } = await db.from(table).insert(rows.slice(i, i + size) as never);
+    if (error) throw new Error(`insert ${table}: ${error.message}`);
+  }
+}
+
+// ------------------------------------------------------------------- reset
+
+async function reset(): Promise<void> {
+  const { data: existing } = await db
+    .from("restaurants").select("id").eq("slug", RESTAURANT_SLUG).maybeSingle();
+
+  if (existing) {
+    // ON DELETE CASCADE clears everything hanging off the restaurant.
+    await db.from("restaurants").delete().eq("id", existing.id);
+    console.log("  cleared previous demo restaurant");
+  }
+
+  // Auth users are not cascaded from restaurants; remove them by email.
+  const { data: users } = await db.auth.admin.listUsers({ page: 1, perPage: 200 });
+  const demoEmails = new Set<string>([
+    ...STAFF.map((s) => s.email),
+    ...GUESTS.map((g) => g.email),
+  ]);
+  for (const u of users?.users ?? []) {
+    if (u.email && demoEmails.has(u.email)) await db.auth.admin.deleteUser(u.id);
+  }
+}
+
+// ------------------------------------------------------------------- main
+
+async function main(): Promise<void> {
+  console.log("Seeding Brigade demo data…\n");
+  await reset();
+
+  // ---- restaurant
+  const { data: restaurant, error: rErr } = await db
+    .from("restaurants")
+    .insert({
+      name: "Brigade", slug: RESTAURANT_SLUG, timezone: "Europe/London",
+      currency: "GBP", tax_rate: 0.08, service_hours: SERVICE_HOURS, covers: 60,
+    })
+    .select("id").single();
+  if (rErr || !restaurant) throw new Error(`restaurant: ${rErr?.message}`);
+  const restaurantId = restaurant.id;
+  console.log("  restaurant");
+
+  // ---- users. email_confirm: true so place_order()'s verified-email check passes.
+  const userIds = new Map<string, string>();
+  for (const person of [...STAFF, ...GUESTS]) {
+    const { data, error } = await db.auth.admin.createUser({
+      email: person.email, password: DEMO_PASSWORD, email_confirm: true,
+      user_metadata: { full_name: person.name },
+    });
+    if (error || !data.user) throw new Error(`user ${person.email}: ${error?.message}`);
+    userIds.set(person.email, data.user.id);
+  }
+
+  // The handle_new_user trigger created each profile as a guest; assign real roles.
+  for (const s of STAFF) {
+    const { error } = await db.from("profiles").update({
+      restaurant_id: restaurantId, role: s.role, station: s.station, full_name: s.name,
+    }).eq("id", userIds.get(s.email)!);
+    if (error) throw new Error(`profile ${s.email}: ${error.message}`);
+  }
+  for (const g of GUESTS) {
+    await db.from("profiles").update({ full_name: g.name, allergens: g.allergens })
+      .eq("id", userIds.get(g.email)!);
+  }
+  console.log(`  ${STAFF.length} staff + ${GUESTS.length} guests`);
+
+  // ---- suppliers
+  const { data: suppliers } = await db.from("suppliers").insert(
+    SUPPLIERS.map((s) => ({
+      restaurant_id: restaurantId, name: s.name, contact: s.contact, lead_time_days: s.leadTimeDays,
+    })),
+  ).select("id, name");
+  const supplierIds = new Map((suppliers ?? []).map((s) => [s.name, s.id]));
+
+  // ---- ingredients. Start at 0; every unit of stock arrives via the ledger, so
+  // stock_qty stays a true projection of stock_movements from the very first row.
+  const { data: ingredients } = await db.from("ingredients").insert(
+    INGREDIENTS.map((i) => ({
+      restaurant_id: restaurantId, name: i.name, unit: i.unit, stock_qty: 0,
+      par_level: i.parLevel, reorder_point: Math.round(i.parLevel * 0.3 * 100) / 100,
+      cost_per_unit_cents: i.costPerUnitCents, supplier_id: supplierIds.get(i.supplier) ?? null,
+      shelf_life_days: i.shelfLifeDays,
+    })),
+  ).select("id, name");
+  const ingredientIds = new Map((ingredients ?? []).map((i) => [i.name, i.id]));
+  console.log(`  ${INGREDIENTS.length} ingredients, ${SUPPLIERS.length} suppliers`);
+
+  // ---- categories & dishes
+  const { data: categories } = await db.from("menu_categories").insert(
+    CATEGORIES.map((name, idx) => ({ restaurant_id: restaurantId, name, sort: idx })),
+  ).select("id, name");
+  const categoryIds = new Map((categories ?? []).map((c) => [c.name, c.id]));
+
+  const { data: dishes } = await db.from("dishes").insert(
+    DISHES.map((d, idx) => ({
+      restaurant_id: restaurantId, category_id: categoryIds.get(d.category) ?? null,
+      name: d.name, description: d.description, price_cents: d.priceCents,
+      station: d.station, prep_minutes: d.prepMinutes, tags: d.tags, allergens: d.allergens,
+      sort: idx,
+    })),
+  ).select("id, name, price_cents, station");
+  const dishIds = new Map((dishes ?? []).map((d) => [d.name, d.id]));
+
+  await chunkInsert("recipe_items", DISHES.flatMap((d) =>
+    d.recipe.map((r) => ({
+      dish_id: dishIds.get(d.name)!, ingredient_id: ingredientIds.get(r.ingredient)!, qty: r.qty,
+    })),
+  ));
+  console.log(`  ${DISHES.length} dishes with bills of materials`);
+
+  // ---- tables
+  await chunkInsert("tables", TABLES.map((t) => ({
+    restaurant_id: restaurantId, label: t.label, seats: t.seats, zone: t.zone, status: "open",
+  })));
+
+  // ------------------------------------------------------------------
+  // Six weeks of service history.
+  //
+  // Orders and items are written directly (not through place_order) because we're
+  // fabricating the past. Stock movements are written alongside so the ledger stays
+  // consistent with what was "sold", which is what makes waste variance meaningful.
+  // ------------------------------------------------------------------
+  const totalWeight = DISHES.reduce((s, d) => s + d.weight, 0);
+  const guestIds = GUESTS.map((g) => userIds.get(g.email)!);
+  const serverId = userIds.get("server@brigade.test")!;
+
+  const { data: tableRows } = await db.from("tables").select("id, seats").eq("restaurant_id", restaurantId);
+  const tableList = tableRows ?? [];
+
+  const orders: Record<string, unknown>[] = [];
+  const itemsByOrder: { orderId: string; dish: SeedDish; qty: number; firedAt: Date; price: number }[] = [];
+  const consumption = new Map<string, number>();  // ingredient -> total consumed
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  for (let daysAgo = WEEKS_OF_HISTORY * 7; daysAgo >= 1; daysAgo--) {
+    const day = new Date(today);
+    day.setDate(day.getDate() - daysAgo);
+    const weekday = day.getDay();
+
+    // covers for the day, with a little week-to-week noise
+    const covers = Math.max(8, Math.round(jitter(COVERS_BY_WEEKDAY[weekday]!, 0.18)));
+    // dinner carries ~65% of covers on days with two services
+    const services: { startHour: number; share: number }[] =
+      weekday === 0 ? [{ startHour: 12, share: 1 }]
+                    : [{ startHour: 12, share: 0.35 }, { startHour: 18, share: 0.65 }];
+
+    for (const service of services) {
+      const serviceCovers = Math.round(covers * service.share);
+      // parties of 2–4 mostly
+      let seated = 0;
+      while (seated < serviceCovers) {
+        const partySize = randInt(1, 4) === 4 ? randInt(4, 6) : randInt(1, 3);
+        seated += partySize;
+
+        const table = tableList[randInt(0, tableList.length - 1)]!;
+        const openedAt = new Date(day);
+        // arrivals cluster mid-service rather than spreading flat
+        const offset = Math.round((rand() + rand()) / 2 * 210);
+        openedAt.setHours(service.startHour, offset, 0, 0);
+
+        const turnMinutes = 55 + partySize * 8 + randInt(-10, 25);
+        const closedAt = new Date(openedAt.getTime() + turnMinutes * 60_000);
+
+        const orderId = crypto.randomUUID();
+        // one dish per cover, plus a drink for most people
+        const lineCount = partySize + (rand() < 0.75 ? partySize : 0);
+        let subtotal = 0;
+
+        for (let n = 0; n < lineCount; n++) {
+          const dish = weightedPick(DISHES, totalWeight);
+          const qty = 1;
+          const firedAt = new Date(openedAt.getTime() + randInt(4, 18) * 60_000);
+          itemsByOrder.push({ orderId, dish, qty, firedAt, price: dish.priceCents });
+          subtotal += dish.priceCents * qty;
+
+          for (const line of dish.recipe) {
+            const key = ingredientIds.get(line.ingredient)!;
+            consumption.set(key, (consumption.get(key) ?? 0) + line.qty * qty);
+          }
+        }
+
+        const tax = Math.round(subtotal * 0.08);
+        orders.push({
+          id: orderId, restaurant_id: restaurantId, table_id: table.id,
+          guest_id: guestIds[randInt(0, guestIds.length - 1)]!, server_id: serverId,
+          status: "paid", opened_at: openedAt.toISOString(), closed_at: closedAt.toISOString(),
+          subtotal_cents: subtotal, tax_cents: tax,
+          tip_cents: rand() < 0.6 ? Math.round(subtotal * 0.1) : 0,
+          total_cents: subtotal + tax,
+        });
+      }
+    }
+  }
+
+  await chunkInsert("orders", orders);
+  console.log(`  ${orders.length} historical orders across ${WEEKS_OF_HISTORY} weeks`);
+
+  await chunkInsert("order_items", itemsByOrder.map((i) => ({
+    order_id: i.orderId, dish_id: dishIds.get(i.dish.name)!, qty: i.qty,
+    unit_price_cents: i.price, status: "served", station: i.dish.station,
+    fired_at: i.firedAt.toISOString(),
+    plated_at: new Date(i.firedAt.getTime() + i.dish.prepMinutes * 60_000).toISOString(),
+    served_at: new Date(i.firedAt.getTime() + (i.dish.prepMinutes + 2) * 60_000).toISOString(),
+    created_at: i.firedAt.toISOString(),
+  })));
+  await chunkInsert("payments", orders.map((o) => ({
+    order_id: o.id as string, method: "card",
+    amount_cents: (o.total_cents as number) + (o.tip_cents as number), status: "succeeded",
+  })));
+  console.log(`  ${itemsByOrder.length} order items + payments`);
+
+  // ------------------------------------------------------------------
+  // Stock ledger. Purchases cover historical consumption plus today's opening
+  // stock, so stock_qty ends up exactly where we want it for the demo.
+  // ------------------------------------------------------------------
+  const movements: Record<string, unknown>[] = [];
+  const managerId = userIds.get("manager@brigade.test")!;
+
+  // Dishes we want visibly near-86 on camera. The runway board needs something
+  // to count down on, and the demo script depends on it (docs/07-submission.md).
+  const NEAR_86: Record<string, number> = {
+    "Sea bass fillet": 4,     // → Sea bass main shows "4 left"
+    "King scallops": 9,       // → Scallops starter shows "3 left" (3 per portion)
+    "Wild garlic": 0.06,      // → binds the scallops too, short shelf life
+  };
+
+  for (const ing of INGREDIENTS) {
+    const id = ingredientIds.get(ing.name)!;
+    const consumed = consumption.get(id) ?? 0;
+    const closing = NEAR_86[ing.name] ?? jitter(ing.parLevel * 0.75, 0.25);
+
+    // one purchase per week, sized to cover that week's usage
+    const weeklyPurchase = (consumed / WEEKS_OF_HISTORY) * 1.08;
+    for (let w = WEEKS_OF_HISTORY; w >= 1; w--) {
+      const at = new Date(today);
+      at.setDate(at.getDate() - w * 7);
+      at.setHours(8, 15, 0, 0);
+      movements.push({
+        ingredient_id: id, delta: Math.round(weeklyPurchase * 1000) / 1000,
+        reason: "purchase", actor_id: managerId, created_at: at.toISOString(),
+        note: `weekly delivery — ${ing.supplier}`,
+      });
+    }
+
+    // the depletion side of everything sold
+    if (consumed > 0) {
+      movements.push({
+        ingredient_id: id, delta: -Math.round(consumed * 1000) / 1000,
+        reason: "depletion", actor_id: null,
+        created_at: new Date(today.getTime() - 86_400_000).toISOString(),
+        note: "aggregated historical depletion",
+      });
+    }
+
+    // A little waste on perishables, so variance analysis has real signal.
+    if (ing.shelfLifeDays !== null && ing.shelfLifeDays <= 7 && rand() < 0.7) {
+      const at = new Date(today);
+      at.setDate(at.getDate() - randInt(2, 20));
+      movements.push({
+        ingredient_id: id, delta: -Math.round(consumed * 0.03 * 1000) / 1000,
+        reason: "waste", actor_id: userIds.get("grill@brigade.test")!,
+        created_at: at.toISOString(), note: "end of service — past its best",
+      });
+    }
+
+    // Final correction lands stock exactly on the intended opening figure.
+    const runningTotal = movements
+      .filter((m) => m.ingredient_id === id)
+      .reduce((s, m) => s + (m.delta as number), 0);
+    const adjust = Math.round((closing - runningTotal) * 1000) / 1000;
+    if (Math.abs(adjust) > 0.0005) {
+      movements.push({
+        ingredient_id: id, delta: adjust, reason: "purchase", actor_id: managerId,
+        created_at: new Date(today.getTime() + 8 * 3_600_000).toISOString(),
+        note: "opening stock for today's service",
+      });
+    }
+  }
+
+  await chunkInsert("stock_movements", movements);
+  console.log(`  ${movements.length} stock movements (append-only ledger)`);
+
+  // Project the ledger onto ingredients.stock_qty — the ONLY place this is done
+  // outside place_order()/adjust_stock(). Must match the reconciliation query in
+  // docs/08-runbook.md exactly, or every downstream number is wrong.
+  for (const ing of INGREDIENTS) {
+    const id = ingredientIds.get(ing.name)!;
+    const total = movements
+      .filter((m) => m.ingredient_id === id)
+      .reduce((s, m) => s + (m.delta as number), 0);
+    const { error } = await db.from("ingredients")
+      .update({ stock_qty: Math.round(total * 1000) / 1000 }).eq("id", id);
+    if (error) throw new Error(`project stock ${ing.name}: ${error.message}`);
+  }
+  console.log("  projected stock_qty from the ledger");
+
+  // ---- velocity: EWMA per (dish, weekday, daypart) from the history above
+  const velocityRows: Record<string, unknown>[] = [];
+  for (const dish of DISHES) {
+    const dishId = dishIds.get(dish.name)!;
+    for (let weekday = 0; weekday < 7; weekday++) {
+      for (const daypart of ["lunch", "dinner"]) {
+        if (weekday === 0 && daypart === "dinner") continue; // closed Sunday evening
+        const sold = itemsByOrder.filter((i) => {
+          if (i.dish.name !== dish.name) return false;
+          if (i.firedAt.getDay() !== weekday) return false;
+          const h = i.firedAt.getHours();
+          return daypart === "lunch" ? h < 16 : h >= 16;
+        });
+        const occurrences = Math.max(1, WEEKS_OF_HISTORY);
+        const hours = daypart === "lunch" ? 3 : 4.5;
+        const perHour = sold.length / occurrences / hours;
+        velocityRows.push({
+          dish_id: dishId, weekday, daypart,
+          ewma_units_per_hour: Math.round(perHour * 10000) / 10000,
+          sample_count: occurrences,
+        });
+      }
+    }
+  }
+  await chunkInsert("dish_velocity", velocityRows);
+  console.log(`  ${velocityRows.length} velocity rows`);
+
+  // ---- today: a live service in progress, so the KDS isn't empty on open
+  const openOrders: Record<string, unknown>[] = [];
+  const openItems: Record<string, unknown>[] = [];
+  const now = new Date();
+  const liveTables = tableList.slice(0, 3);
+
+  for (const [idx, table] of liveTables.entries()) {
+    const orderId = crypto.randomUUID();
+    const openedAt = new Date(now.getTime() - (12 + idx * 9) * 60_000);
+    let subtotal = 0;
+    const statuses = ["placed", "fired", "cooking"] as const;
+
+    for (let n = 0; n < 2 + idx; n++) {
+      const dish = weightedPick(DISHES, totalWeight);
+      subtotal += dish.priceCents;
+      openItems.push({
+        order_id: orderId, dish_id: dishIds.get(dish.name)!, qty: 1,
+        unit_price_cents: dish.priceCents, status: statuses[Math.min(n, 2)]!,
+        station: dish.station, created_at: openedAt.toISOString(),
+      });
+    }
+
+    const tax = Math.round(subtotal * 0.08);
+    openOrders.push({
+      id: orderId, restaurant_id: restaurantId, table_id: table.id,
+      guest_id: guestIds[idx % guestIds.length]!, server_id: serverId, status: "open",
+      opened_at: openedAt.toISOString(), subtotal_cents: subtotal, tax_cents: tax,
+      total_cents: subtotal + tax,
+    });
+    await db.from("tables").update({ status: "seated" }).eq("id", table.id);
+  }
+  await chunkInsert("orders", openOrders);
+  await chunkInsert("order_items", openItems);
+
+  // a waiting queue so the host screen has something in it
+  await chunkInsert("queue_entries", [
+    { restaurant_id: restaurantId, guest_name: "Walk-in", party_size: 2,
+      quoted_minutes: 25, status: "waiting",
+      joined_at: new Date(now.getTime() - 24 * 60_000).toISOString() },
+    { restaurant_id: restaurantId, guest_name: "Walk-in", party_size: 4,
+      quoted_minutes: 40, status: "waiting",
+      joined_at: new Date(now.getTime() - 18 * 60_000).toISOString() },
+  ]);
+
+  console.log(`  ${openOrders.length} live orders + queue for today\n`);
+
+  // ---- summary
+  const { data: avail } = await db.from("dish_availability").select("dish_id, portions")
+    .eq("restaurant_id", restaurantId);
+  const scarce = (avail ?? []).filter((a) => a.portions <= 10).length;
+
+  console.log("Done.");
+  console.log(`  logins: ${[...STAFF, ...GUESTS].map((p) => p.email).join(", ")}`);
+  console.log(`  password: ${DEMO_PASSWORD}`);
+  console.log(`  ${scarce} dishes are near-86 — the runway board has something to count down.\n`);
+}
+
+main().catch((err: unknown) => {
+  console.error("\nSeed failed:", err instanceof Error ? err.message : err);
+  process.exit(1);
+});

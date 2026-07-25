@@ -2,7 +2,24 @@
 
 **User story:** US3 (Silver) · **Status:** built
 
-_As deployed:_ `/reserve` (guest booking + queue join) and `/ops/reservations` (read-only book). Slots generated from real service_hours in the restaurant's timezone; capacity re-checked server-side; the wait quote comes from real median turn times via `join_queue()`. Seating and no-show actions are not wired.
+_As deployed:_ `/reserve` (guest booking + queue join) and `/ops/reservations` (read-only book). Slots generated from real service_hours in the restaurant's timezone; capacity decided in `book_table()`; the wait quote comes from real median turn times via `join_queue()`. Seating and no-show actions are not wired.
+
+> **Fixed 2026-07-26, patch 005.** Booking was refused for **every** diner. The route decided
+> capacity itself, counting `tables` where `seats >= party_size` — but `tables_read` requires
+> `is_staff()`, so a diner counted zero tables, `fitting - taken <= 0` was always true, and every
+> request came back "That time is fully booked." The `/reserve` page had the mirror fault: it
+> counted tables it also could not see, fell back to `|| 1`, and read only the caller's own
+> reservations, so it drew as available exactly the slots the API would reject.
+>
+> Nothing caught this for two days because the seeded book is full of reservations — written by
+> the seed script with the service key. The feature looked finished *because* the data proved it
+> had once worked. It took signing in as an actual diner and pressing the button, which is what
+> `npm run verify:features` now does on every run.
+>
+> The decision moved into `book_table()`, security definer, alongside `place_order()` and
+> `join_queue()` — for the same reason all three are there: **the rule depends on data the caller
+> is not allowed to read, so it cannot live in the caller.** Two views, `restaurant_table_count`
+> and `reservation_load`, let the page grey slots honestly without exposing who booked.
 
 **Problem it solves:** "Long waiting times for tables." The PS asks for "smart reservations" and "queue
 management" — the *smart* part being that a quoted wait should come from how long tables actually take

@@ -2,7 +2,17 @@
 
 **User story:** US4 (Gold) · **Status:** built (read-only)
 
-_As deployed:_ `/ops/floor`. Real table states and dwell time; seating and bussing are not wired.
+_As deployed:_ `/ops/floor`. Real table states and dwell time; manual seating and bussing actions are not wired.
+
+> **Fixed 2026-07-26, patch 004.** A table with food on it showed as free. `pay_order()`
+> correctly released a settled table to `dirty` so it would be bussed rather than re-seated, but
+> nothing ever set the other end of that transition — ordering at table 10 left it `open`. Only
+> the seed script had ever written `seated`, which is why every screenshot looked right and the
+> live behaviour did not. Now a trigger on `orders`: any order attached to a table means that
+> table is occupied, however the order got there, so the rule belongs to the table rather than to
+> one function that happens to insert into it. `dirty` is deliberately left alone — a table that
+> needs a clean still needs one, and clearing that flag because an order arrived would destroy
+> the only signal the busser has.
 
 **Problem it solves:** "Inefficient staff coordination" and part of "long waiting times for tables." A
 host seating a party needs to know what's actually free right now, and a server needs to see their own

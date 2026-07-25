@@ -151,21 +151,59 @@ having i.stock_qty <> coalesce(sum(m.delta), 0);
 Any row returned is a bug. Stock must only ever be mutated inside `place_order()` or
 `adjust_stock()` — never a bare `UPDATE ingredients SET stock_qty = ...`.
 
-## Pre-submission verification
+## Verification
 
-Run this list against the **deployed** URL, on a **phone**, on **cellular** — not localhost, not
-desktop wifi.
+### One command
+
+```bash
+npm run check              # everything, against the deployed site   (~3 min)
+npm run check -- --quick   # skip the throwaway database and the build (~40 s)
+npm run check -- --local   # test localhost:3000 instead
+```
+
+Seven checks, in order of how fast they fail. Each is introduced as a question in plain
+English with what a ✔ actually proves, because a green tick nobody can interpret is not a
+check. It exits non-zero if any fails, so it works in CI as-is.
+
+| # | Question | Command | What it proves |
+|---|---|---|---|
+| 1 | Is the SQL going to be rejected, or quietly do nothing? | `sql:lint` | Five static rules, each from a defect that shipped once — including a column `REVOKE` that runs cleanly and has no effect |
+| 2 | Does the runway maths hold up? | `test` | 69 unit tests on the engine alone, no database |
+| 3 | Do the pieces still fit together? | `typecheck` | One screen expecting a price where another sends a name |
+| 4 | Does the database enforce the rules we claim? | `sql:check` | Throwaway Postgres, every migration and patch applied **twice**, then 18 direct assertions |
+| 5 | Is the live data sound? | `verify:data` | Ledger equals projection, enough history for the forecast, no cost reachable by a diner |
+| 6 | Does every feature work for a real person? | `verify:features` | All 15 features driven over real HTTP as the real seeded people |
+| 7 | Would it deploy right now? | `build` | The production build, exactly as Vercel runs it |
+
+### What `verify:features` actually does
+
+It signs in as all seven staff roles and two diners, then: reads the menu anonymously,
+places an order, races two diners for the last portion, follows the order as the guest who
+placed it, fails to read it as a different guest, fires and plates as the grill cook, is
+refused when that cook tries to serve, is refused when they touch the sauté ticket, serves
+as expo, is refused payment while food is still cooking, pays with a tip, pays again and
+confirms one charge, books a table, is refused an impossible party, joins the queue, is
+refused a second place in it, books in a delivery, is refused that as a cook, tries to edit
+a stock level directly and is stopped by the database, and opens all 17 pages.
+
+Two things make it trustworthy rather than decorative:
+
+- **It cleans up after itself.** Everything it consumed goes back through `adjust_stock()`
+  with a note, which is the sanctioned path, and it then re-checks that the ledger still
+  equals the shelf. A test that left the demo data wrong would not get run before a demo.
+- **Its last check is a completeness gate.** It fails if a file exists in `docs/features/`
+  that it does not exercise. "We test every feature" then breaks when it stops being true,
+  instead of quietly ageing into a false claim.
+
+It writes to the live database on purpose. A read-only test cannot prove ordering works.
+
+### By hand, on a phone, on cellular
+
+`check` cannot see a screen. Run this list against the **deployed** URL on an actual phone.
 
 - [ ] Sign up fresh with email + password, receive and enter OTP, land on `/menu`
 - [ ] Sign in with Google
-- [ ] Each of the 7 roles lands on its correct surface
 - [ ] Menu shows live portion counts; a near-86 dish shows its countdown
-- [ ] Place an order → docket appears on KDS in ~1s → guest tracking advances
-- [ ] Two browsers race the last portion → exactly one wins, loser sees a useful message
-- [ ] Stock reconciliation query returns zero rows
-- [ ] Guest cannot read another restaurant's orders via the REST API directly
-- [ ] `cost_per_unit_cents` appears in no guest-facing payload
-- [ ] Analytics charts have data; forecast is non-zero
 - [ ] Keyboard-only navigation works; focus is visible
 - [ ] Reduced-motion setting removes animation
 - [ ] No horizontal scroll at 375 px

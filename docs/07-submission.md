@@ -9,7 +9,7 @@
 | Requirement | State |
 |---|---|
 | Hosted application live and publicly accessible | ✅ https://brigade-flame.vercel.app |
-| GitHub repository public | ⬜ push pending |
+| GitHub repository public | ✅ verified `private: false` |
 | README: Team Name | ✅ |
 | README: Tech Stack | ✅ incl. the Express deviation, stated |
 | README: User Stories Completed | ✅ |
@@ -171,6 +171,22 @@ this repo's own docs or commit messages claimed a guarantee that did not exist.
 | Guests see ingredient names, not quantities | `recipe_items` was `using (true)` | names-only view |
 | — | `dish_binding_ingredient` leaked exact pantry stock to anonymous callers | `security_invoker` |
 | — | KDS Fire buttons unreachable at 375/414px — the rail painted over them | shrinkable grid + breakpoint |
+
+### Three more, found later, by a different method
+
+The audit read code and probed endpoints. It never signed in as a diner and pressed
+"Book". `npm run verify:features` does, and found these on its first run — which is the
+argument for testing a feature the way a person uses it rather than the way it is built.
+
+| Was claimed | What was actually true | Fix |
+|---|---|---|
+| "Capacity re-checked server-side" — booking works | Booking was refused for **every diner**. The route counted `tables` with the caller's session, but `tables_read` requires `is_staff()`, so a diner counted 0 tables and always got "fully booked". The `/reserve` page had the mirror fault and offered exactly the slots the API would reject | patch 005: `book_table()` + two availability views |
+| The floor map shows what is free | A table with an open order still showed `open`. `pay_order()` released a paid table to `dirty`; nothing ever set `seated`. Only the seed script had written it | patch 004: trigger on `orders` |
+| Runway gauges are labelled for screen readers | They were — with the *wrong sentence*. The `aria-label` said a dish "runs out about 23:14" while the screen said "enough for tonight": a prediction spoken only to blind users after it was deliberately withheld from everyone else. The suppression rule had been added to the visible branch only | `RunwayMeter` label mirrors the visible branches |
+
+The common shape of all three: **a rule was implemented in one of two places that had to
+agree**, and nothing compared them. The seed script masked the first two by writing data,
+with the service key, that the product itself could not have produced.
 
 ### Open, and deliberately so
 

@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "sql:bundle": "node scripts/bundle-sql.mjs",
     "seed": "tsx supabase/seed/seed.ts"
   },
   "dependencies": {

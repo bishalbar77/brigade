@@ -6,11 +6,46 @@ Operational reference. Written before the code so the deploy path isn't discover
 
 ```bash
 npm install
-cp .env.example .env.local        # fill in from Supabase dashboard → Project Settings → API
-npx supabase db push              # or paste supabase/migrations/*.sql in the SQL editor, in order
+cp .env.example .env.local        # fill in from the Supabase dashboard, see below
+npm run sql:bundle                # regenerates supabase/apply_all.sql
+# → paste supabase/apply_all.sql into the Supabase SQL editor and run once
 npm run seed                      # 6 weeks of history — required for anything statistical
 npm run dev                       # http://localhost:3000
 ```
+
+### Applying migrations
+
+**Preferred: the SQL editor.** `npm run sql:bundle` concatenates every migration into
+`supabase/apply_all.sql`, in order, wrapped in a single transaction so a failure rolls back
+cleanly. Paste it into the dashboard's SQL editor and run it once.
+
+Why not `psql` or the CLI: a current Supabase project's direct host
+(`db.<ref>.supabase.co`) is **IPv6-only** and won't resolve on an IPv4-only network, and the
+pooled host is region-specific (`aws-N-<region>.pooler.supabase.com`), so it has to be copied
+from **Settings → Database → Connection string** anyway. If you have that string:
+
+```bash
+psql "<connection-string-from-dashboard>" -f supabase/apply_all.sql
+```
+
+The Supabase CLI (`supabase db push`) also works, but it requires `supabase init` plus
+migration filenames in `YYYYMMDDHHMMSS_name.sql` form — ours are `001_`…`011_` for
+readability, so they'd need renaming first. Not worth it for a 3-day build.
+
+### Verifying the schema landed
+
+```bash
+# should return [] (empty, not an error) once migrations have run
+curl -s "$NEXT_PUBLIC_SUPABASE_URL/rest/v1/restaurants?select=id" \
+     -H "apikey: $NEXT_PUBLIC_SUPABASE_ANON_KEY"
+```
+
+| Response | Meaning |
+|---|---|
+| `[]` | schema applied, no data yet → run `npm run seed` |
+| `{"code":"PGRST205"...}` | table not found → migrations have **not** been applied |
+| `{"message":"Invalid API key"}` | wrong key |
+| `{"message":"No API key found..."}` | the `apikey` header is missing |
 
 ## Environment variables
 

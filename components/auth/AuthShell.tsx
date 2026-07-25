@@ -201,3 +201,33 @@ export function AuthLink({ href, children }: { href: string; children: React.Rea
     </Link>
   );
 }
+
+/**
+ * What the auth pages show before their JavaScript arrives.
+ *
+ * Both sign-in and verify read `useSearchParams()` (for `returnTo` and a prefilled
+ * email), which forces their subtree to render on the client. Their Suspense fallback was
+ * `{null}`, so the prerendered HTML was a heading and nothing else: on a phone on
+ * restaurant wifi, the first page a judge opens showed a bare title for as long as the
+ * bundle took, with no indication a form was coming.
+ *
+ * Field-shaped rather than a spinner, for the same reason the route skeletons are
+ * page-shaped — arriving into the right layout is most of what makes a wait feel short,
+ * and nothing shifts when the real inputs replace these.
+ */
+export function AuthFormSkeleton({ fields = 2 }: { fields?: number }) {
+  return (
+    <div aria-busy="true" aria-live="polite" aria-label="Loading the form">
+      {Array.from({ length: fields }, (_, i) => (
+        <p key={i} style={{ marginBottom: "var(--space-4)" }}>
+          <span
+            className="skeleton"
+            style={{ display: "block", height: "0.8rem", width: "6rem", marginBottom: "var(--space-2)" }}
+          />
+          <span className="skeleton" style={{ display: "block", height: "48px" }} />
+        </p>
+      ))}
+      <span className="skeleton" style={{ display: "block", height: "48px", marginTop: "var(--space-5)" }} />
+    </div>
+  );
+}

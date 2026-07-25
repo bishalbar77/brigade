@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   AuthAlt,
   AuthLink,
+  AuthFormSkeleton,
   AuthShell,
   ErrorNote,
   Field,
@@ -118,7 +119,13 @@ function SignInForm() {
 export default function SignInPage() {
   // useSearchParams needs a Suspense boundary to keep the route prerenderable.
   return (
-    <Suspense fallback={<AuthShell title="Sign in">{null}</AuthShell>}>
+    <Suspense
+      fallback={
+        <AuthShell title="Sign in">
+          <AuthFormSkeleton fields={2} />
+        </AuthShell>
+      }
+    >
       <SignInForm />
     </Suspense>
   );

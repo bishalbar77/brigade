@@ -2,7 +2,13 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AuthShell, ErrorNote, Field, SubmitButton } from "@/components/auth/AuthShell";
+import {
+  AuthFormSkeleton,
+  AuthShell,
+  ErrorNote,
+  Field,
+  SubmitButton,
+} from "@/components/auth/AuthShell";
 import { createClient } from "@/lib/supabase/client";
 import { homeFor } from "@/lib/auth/roles";
 
@@ -144,7 +150,13 @@ function VerifyForm() {
 
 export default function VerifyPage() {
   return (
-    <Suspense fallback={<AuthShell title="Verify your email">{null}</AuthShell>}>
+    <Suspense
+      fallback={
+        <AuthShell title="Verify your email">
+          <AuthFormSkeleton fields={1} />
+        </AuthShell>
+      }
+    >
       <VerifyForm />
     </Suspense>
   );

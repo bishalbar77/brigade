@@ -46,36 +46,48 @@ export interface RunwayInput {
   now?: Date;
 }
 
+export interface PortionsRunwayInput {
+  dishId: string;
+  /** May be the UNLIMITED sentinel, matching the dish_availability view. */
+  portions: number;
+  manually86?: boolean;
+  velocity?: Velocity;
+  categoryMeanVelocity?: number;
+  globalMeanVelocity?: number;
+  serviceWindows: readonly DaypartWindow[];
+  now?: Date;
+  bindingIngredientId?: string | null;
+}
+
 /**
- * Full runway calculation for one dish.
+ * Runway from a portion count that has already been computed.
  *
- * Deliberate behaviours worth knowing:
- *  - outside service hours: portions only, no prediction (velocity is meaningless)
- *  - fewer than 3 velocity samples: `insufficientHistory`, so the UI can say
- *    "not enough history" instead of fabricating a time
- *  - manual 86 overrides computed availability but stays distinguishable from it
+ * Exists because guest surfaces read `menu_public`, which carries `portions` but
+ * deliberately exposes no ingredient stock — so they cannot recompute portions
+ * from a bill of materials the way `computeRunway` does. Both paths funnel
+ * through this one function, so there is exactly ONE implementation of the
+ * banding, suppression and cold-start rules. The alternative — reimplementing
+ * them in SQL for the guest — is two implementations that will drift.
  */
-export function computeRunway(input: RunwayInput): RunwayResult {
+export function runwayFromPortions(input: PortionsRunwayInput): RunwayResult {
   const {
-    dish,
-    stockByIngredient,
+    dishId,
+    portions: rawPortions,
+    manually86 = false,
     velocity,
     categoryMeanVelocity,
     globalMeanVelocity = 0,
     serviceWindows,
     now = new Date(),
+    bindingIngredientId = null,
   } = input;
 
-  const rawPortions = portionsAvailable(dish.recipe, stockByIngredient);
   const unlimited = isUnlimited(rawPortions);
 
   // A manual 86 (burnt sauce, fryer down) zeroes availability regardless of stock.
-  const manually86 = isManually86(dish, now);
   const portions = manually86 ? 0 : rawPortions;
 
-  const daypart = currentDaypart(now, serviceWindows);
-  const serviceOpen = daypart !== null;
-
+  const serviceOpen = currentDaypart(now, serviceWindows) !== null;
   const { unitsPerHour, insufficientHistory } = resolveVelocity(
     velocity,
     categoryMeanVelocity,
@@ -86,18 +98,41 @@ export function computeRunway(input: RunwayInput): RunwayResult {
   const minutes =
     serviceOpen && !insufficientHistory ? runwayMinutes(portions, unitsPerHour) : null;
 
-  const predicted86At = minutes === null ? null : new Date(now.getTime() + minutes * 60_000);
-
   return {
-    dishId: dish.id,
+    dishId,
     portions: unlimited && !manually86 ? rawPortions : portions,
     runwayMinutes: minutes,
-    predicted86At,
+    predicted86At: minutes === null ? null : new Date(now.getTime() + minutes * 60_000),
     band: bandFor(portions, minutes),
     unlimited: unlimited && !manually86,
     insufficientHistory: insufficientHistory && serviceOpen,
-    bindingIngredientId: bindingIngredient(dish.recipe, stockByIngredient),
+    bindingIngredientId,
   };
+}
+
+/**
+ * Full runway calculation for one dish.
+ *
+ * Deliberate behaviours worth knowing:
+ *  - outside service hours: portions only, no prediction (velocity is meaningless)
+ *  - fewer than 3 velocity samples: `insufficientHistory`, so the UI can say
+ *    "not enough history" instead of fabricating a time
+ *  - manual 86 overrides computed availability but stays distinguishable from it
+ */
+export function computeRunway(input: RunwayInput): RunwayResult {
+  const { dish, stockByIngredient, now = new Date() } = input;
+
+  return runwayFromPortions({
+    dishId: dish.id,
+    portions: portionsAvailable(dish.recipe, stockByIngredient),
+    manually86: isManually86(dish, now),
+    velocity: input.velocity,
+    categoryMeanVelocity: input.categoryMeanVelocity,
+    globalMeanVelocity: input.globalMeanVelocity,
+    serviceWindows: input.serviceWindows,
+    now,
+    bindingIngredientId: bindingIngredient(dish.recipe, stockByIngredient),
+  });
 }
 
 /**

@@ -3,67 +3,83 @@
 /*
  * Brigade design tokens.
  *
- * ────────────────────────────────────────────────────────────────────────────
- * PLACEHOLDER VALUES. The palette and typefaces below are neutral greys and
- * system fallbacks ON PURPOSE — the real visual direction comes from the
- * `frontend-design` skill, which owns colour and type (see docs/04-design-system.md).
+ * DIRECTION: "blue is the only colour food never is."
+ * Professional kitchens use blue for everything that must not be mistaken for
+ * food — food-safe gloves, blue catering plasters, blue boards for raw fish —
+ * precisely because no ingredient is blue, so it reads instantly against
+ * anything. That gives the palette a rule rather than a preference:
  *
- * The token NAMES are fixed, so components can be written against them now and
- * a palette change stays a one-file change. Components must reference semantic
- * tokens only — never a raw hex, never `text-slate-600`.
- * ────────────────────────────────────────────────────────────────────────────
+ *     BLUE = the system talking.      WARM = the food talking.
+ *
+ * Every interactive element is steel blue. Every scarcity state is amber →
+ * flame → drained ash. The two vocabularies cannot be confused, which is what
+ * the never-colour-alone rule is actually protecting against.
+ *
+ * GROUND is dark and warm because both audiences need dark for reasons that
+ * agree: a diner in a dim room (a bright screen blinds her and kills the mood)
+ * and a cook on an 8-hour shift (dark reduces fatigue, bone-on-espresso holds
+ * contrast at 2m). Warm rather than neutral because the guest side must be
+ * appetising — a dining room at service, not a dashboard.
+ *
+ * Components reference semantic tokens only. Never a raw hex, never text-slate-600.
  */
 
 @theme {
-  /* surfaces */
-  --color-bg: #ffffff;
-  --color-bg-raised: #fafafa;
-  --color-bg-sunken: #f2f2f2;
+  /* ── surfaces ──────────────────────────────────────────────────────────── */
+  --color-bg: #1e1815;              /* espresso — the room at service       */
+  --color-bg-raised: #2a2320;       /* cards, dockets                       */
+  --color-bg-sunken: #151110;       /* wells, insets, the time track        */
 
-  /* text */
-  --color-fg: #1a1a1a;
-  --color-fg-muted: #5c5c5c;
-  --color-fg-subtle: #8a8a8a;
+  /* ── text ─ bone/enamel, warm so it sits with the ground ───────────────── */
+  --color-fg: #f4efe6;              /* 13.9:1 on bg                         */
+  --color-fg-muted: #b3a79b;        /* 6.6:1 — safe for body                */
+  --color-fg-subtle: #8a7f73;       /* 4.1:1 — LARGE TEXT ONLY              */
 
-  --color-border: #e2e2e2;
-  --color-border-strong: #c2c2c2;
+  --color-border: #382f29;
+  --color-border-strong: #55483f;
 
-  /* the one bold voice — frontend-design decides what it is */
-  --color-accent: #2a2a2a;
-  --color-accent-fg: #ffffff;
+  /* ── the system's voice ────────────────────────────────────────────────── */
+  --color-accent: #3b8fd9;          /* food-safe blue, 5.6:1 on bg          */
+  --color-accent-fg: #06121d;
+  --color-accent-dim: #1d4a72;
 
-  /* status. NEVER the only encoding — pair with icon, label, or position. */
-  --color-ok: #2f6f4f;
-  --color-warn: #8a6510;
-  --color-danger: #8f2c2c;
-  --color-info: #2b5c7a;
+  /* ── status. NEVER the only encoding — always paired with glyph or label ── */
+  --color-ok: #6fa98a;
+  --color-warn: #e0a33c;
+  --color-danger: #d9502f;
+  --color-info: #3b8fd9;
 
-  /* runway bands — the product's own semantic scale */
-  --color-runway-plenty: #2f6f4f;
-  --color-runway-low: #8a6510;
-  --color-runway-critical: #8f2c2c;
-  --color-runway-out: #8a8a8a;
+  /* ── runway bands: the product's own scale ─────────────────────────────── */
+  --color-runway-plenty: #6fa98a;   /* sage — calm; plenty shows no badge   */
+  --color-runway-low: #e0a33c;      /* amber                                */
+  --color-runway-critical: #d9502f; /* flame                                */
+  --color-runway-out: #7d7266;      /* ash — drained, because it's gone     */
 
-  /* type — placeholder stacks; frontend-design replaces these */
-  --font-display: ui-serif, Georgia, serif;
-  --font-body: ui-sans-serif, system-ui, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* ── type ──────────────────────────────────────────────────────────────── */
+  /* Display: irregular, industrial-editorial. Titles + runway numerals only. */
+  --font-display: var(--font-bricolage), "Arial Black", sans-serif;
+  /* Body: real menus are set in serif. Signals restaurant, not dashboard.    */
+  --font-body: var(--font-newsreader), Georgia, serif;
+  /* Mono: load-bearing. Tabular figures stop countdowns jittering.           */
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
 
   /* fluid type scale */
   --text-step--1: clamp(0.78rem, 0.76rem + 0.1vw, 0.84rem);
-  --text-step-0: clamp(0.95rem, 0.92rem + 0.15vw, 1.05rem);
+  --text-step-0: clamp(0.98rem, 0.94rem + 0.18vw, 1.08rem);
   --text-step-1: clamp(1.2rem, 1.1rem + 0.4vw, 1.45rem);
   --text-step-2: clamp(1.5rem, 1.3rem + 0.9vw, 2rem);
   --text-step-3: clamp(1.9rem, 1.5rem + 1.8vw, 2.9rem);
   --text-step-4: clamp(2.4rem, 1.7rem + 3.2vw, 4.2rem);
   --text-step-5: clamp(3rem, 1.8rem + 5.5vw, 6rem);
 
-  /* motion */
+  --radius-sm: 3px;
+  --radius-md: 7px;
+  --radius-lg: 14px;
+
   --ease-out-brigade: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 :root {
-  /* space scale — switched by density, see below */
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
@@ -76,20 +92,38 @@
   --dur-fast: 120ms;
   --dur-base: 240ms;
   --dur-slow: 480ms;
+
+  /* portion gauge geometry — overridden at ops density */
+  --gauge-tick-w: 7px;
+  --gauge-tick-h: 20px;
+  --gauge-gap: 3px;
+  --gauge-track-h: 3px;
 }
 
 /*
- * ONE token system, TWO densities. Guest and ops have almost opposite needs:
- * a phone held at 30cm in a dim room, versus a wall screen read at 2m in a hot,
- * bright kitchen by someone whose hands are busy. Same semantics, different scale.
+ * ONE token system, TWO densities.
+ *
+ * Note the inversion: ops is TIGHTER in space but LARGER in type. Both are
+ * correct — a wall screen needs dense information and large glyphs at once.
  */
 [data-density="ops"] {
+  --space-3: 0.5rem;
   --space-4: 0.625rem;
   --space-5: 0.875rem;
   --space-6: 1.25rem;
-  /* KDS minimum: legible at ~2m */
+  --space-7: 1.75rem;
+
+  /* KDS floor: legible at ~2m. 1.5rem = 24px effective body. */
+  --text-step--1: 1.125rem;
   --text-step-0: 1.5rem;
   --text-step-1: 1.875rem;
+  --text-step-2: 2.375rem;
+  --text-step-3: 3rem;
+
+  --gauge-tick-w: 11px;
+  --gauge-tick-h: 34px;
+  --gauge-gap: 5px;
+  --gauge-track-h: 5px;
 }
 
 @layer base {
@@ -98,12 +132,37 @@
   }
 
   body {
-    background: var(--color-bg);
+    background-color: var(--color-bg);
+    /* Atmosphere, not decoration: one soft warm wash from above, like room
+       light falling on a table. No second gradient, no colour shift. */
+    background-image: radial-gradient(
+      120% 80% at 50% -20%,
+      color-mix(in oklab, var(--color-bg-raised) 85%, var(--color-accent)) 0%,
+      var(--color-bg) 55%
+    );
+    background-attachment: fixed;
     color: var(--color-fg);
     font-family: var(--font-body);
     font-size: var(--text-step-0);
     line-height: 1.55;
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Numbers that change must not reflow their neighbours. */
+  [class*="tabular"],
+  .mono {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+
+  h1, h2, h3 {
+    font-family: var(--font-display);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
   }
 
   /* Quality floor: visible keyboard focus on everything interactive.
@@ -111,17 +170,89 @@
   :focus-visible {
     outline: 2px solid var(--color-accent);
     outline-offset: 2px;
+    border-radius: var(--radius-sm);
   }
 
-  /* Wide content (tables, charts, docket rows) scrolls inside its own container;
-     the page body must never scroll horizontally. */
+  /* Wide content scrolls inside its own container; the body never scrolls x. */
   .scroll-x {
     overflow-x: auto;
     max-width: 100%;
   }
+
+  /* Guest tap targets. */
+  [data-density="guest"] button,
+  [data-density="guest"] a[role="button"] {
+    min-height: 44px;
+  }
 }
 
-/* Nothing in this app requires motion to be understood. */
+/* ── the eyebrow: small caps label, used for station / category / role ────── */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--text-step--1);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-fg-subtle);
+}
+
+/*
+ * ── SIGNATURE: the portion gauge ─────────────────────────────────────────────
+ *
+ * Runway has two dimensions and they are different KINDS of number: portions
+ * are discrete (there is no 3.5 portions), time is continuous. The gauge shows
+ * both honestly — countable ticks over a draining track — so a cook can count
+ * remaining portions at 2m without reading a numeral.
+ *
+ * It animates on CHANGE and then rests. A permanently moving element in a
+ * kitchen is noise.
+ */
+.gauge {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.gauge-ticks {
+  display: flex;
+  gap: var(--gauge-gap);
+  align-items: flex-end;
+}
+
+.gauge-tick {
+  width: var(--gauge-tick-w);
+  height: var(--gauge-tick-h);
+  border-radius: 1px;
+  background: currentColor;
+  transform-origin: bottom center;
+}
+
+/* A spent portion collapses once, then stays put. */
+.gauge-tick[data-spent="true"] {
+  background: var(--color-border-strong);
+  animation: gauge-spend var(--dur-base) var(--ease-out-brigade) both;
+}
+
+@keyframes gauge-spend {
+  from { transform: scaleY(1); opacity: 1; }
+  to   { transform: scaleY(0.28); opacity: 0.45; }
+}
+
+.gauge-track {
+  height: var(--gauge-track-h);
+  background: var(--color-bg-sunken);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.gauge-fill {
+  height: 100%;
+  background: currentColor;
+  border-radius: 999px;
+  transition: width var(--dur-slow) var(--ease-out-brigade);
+}
+
+/* Nothing in this app requires motion to be understood. Under reduced motion
+   the gauge still UPDATES — it just stops animating. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

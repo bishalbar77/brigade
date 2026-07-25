@@ -16,7 +16,7 @@
 --   09. 009_functions.sql
 --   10. 010_rls.sql
 --   11. 010b_column_grants.sql
---   12. 0xx11_realtime.sql
+--   12. 011_realtime.sql
 
 begin;
 
@@ -206,7 +206,15 @@ create index dishes_station_idx on dishes (station);
 
 create table recipe_items (
   dish_id       uuid not null references dishes on delete cascade,
-  ingredient_id uuid not null references ingredients on delete restrict,  -- restrict: can't orphan a BOM
+  -- NO ACTION DEFERRABLE, not RESTRICT. Both refuse to orphan a BOM by deleting an
+  -- ingredient that a recipe still uses — but only NO ACTION can have that check
+  -- deferred to commit time. RESTRICT is checked immediately, which made deleting a
+  -- whole restaurant impossible: the cascade reaches ingredients and recipe_items by
+  -- two separate paths, Postgres doesn't guarantee the order between them, and if
+  -- ingredients goes first the restrict fires and the entire delete is refused.
+  -- Deferring lets the cascade settle, then verifies nothing was orphaned.
+  ingredient_id uuid not null references ingredients
+                  on delete no action deferrable initially deferred,
   -- qty > 0 is load-bearing: zero would divide by zero in dish_availability
   qty           numeric(12,4) not null check (qty > 0),
   primary key (dish_id, ingredient_id)
@@ -304,7 +312,11 @@ create unique index orders_one_open_per_table on orders (table_id)
 create table order_items (
   id               uuid primary key default gen_random_uuid(),
   order_id         uuid not null references orders on delete cascade,
-  dish_id          uuid not null references dishes on delete restrict,
+  -- NO ACTION DEFERRABLE for the same reason as recipe_items.ingredient_id: still
+  -- refuses to orphan a historical line by deleting a dish (archive, never delete),
+  -- but deferring the check lets a whole-restaurant cascade resolve.
+  dish_id          uuid not null references dishes
+                     on delete no action deferrable initially deferred,
   qty              int  not null check (qty > 0),
   -- captured at order time, never re-joined to dishes.price_cents:
   -- a bill must not change because someone edited a price afterwards

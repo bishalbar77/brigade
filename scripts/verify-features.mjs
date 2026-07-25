@@ -21,7 +21,7 @@
  * saying so, which is the sanctioned path, so the ledger and stock_qty stay in
  * agreement and `npm run verify:data` still passes after a run.
  */
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 
 // ── configuration ────────────────────────────────────────────────────────────
 const LOCAL = process.argv.includes("--local");
@@ -901,6 +901,60 @@ async function main() {
         `wide + narrow rows present, cart in ${cartLinks} of them`);
       ok("the collapse button is announced as a menu, not an unlabelled button",
         /aria-expanded="false"/.test(menu.text) && /aria-controls="guest-nav-panel"/.test(menu.text));
+
+      // Admin gets the same treatment, at phone widths only — the wide tap strip is still
+      // there for the wall screen, and both are in the markup with CSS choosing.
+      const kdsNav = await app("/ops/kds", { session: S.grill });
+      ok("the admin header collapses on a phone but keeps the full strip for the wall",
+        /ops-nav-narrow/.test(kdsNav.text) && /ops-nav-wide/.test(kdsNav.text) &&
+        /aria-controls="ops-nav-panel"/.test(kdsNav.text),
+        "both rows present; CSS picks by width");
+      ok("…and it names the section you are on, so a hamburger costs you no bearings",
+        /aria-current="page"/.test(kdsNav.text));
+
+      // Every write here is a 1-2s round trip. A button that greys out and keeps its label
+      // reads as a tap that missed, so people tap again — and on a KDS the second tap is
+      // the next status. aria-busy is the machine-readable half of the fix; checking for it
+      // stops a future action button shipping with no feedback at all.
+      const busyWired = ["/ops/kds", "/ops/runway"];
+      const missing = [];
+      for (const path of busyWired) {
+        const r = await app(path, { session: S.manager });
+        if (!/aria-busy=/.test(r.text)) missing.push(path);
+      }
+      ok("action buttons declare a busy state rather than just going grey",
+        missing.length === 0, missing.length ? `no aria-busy on ${missing.join(", ")}` : busyWired.join(", "));
+    },
+  });
+
+  // 13b ───────────────────────────────────────────────────────────────────────
+  await feature({
+    docs: [],
+    title: "Does anything tell you it is working?",
+    plain: "In plain English: every action here waits on the database for a second or two. " +
+      "This checks the app admits it is busy instead of looking broken while it thinks.",
+    run: async (ok) => {
+      // Route-level skeletons. Without these, tapping a nav item leaves the PREVIOUS page
+      // on screen unchanged for 1-2s, because every ops route is force-dynamic.
+      const shells = [
+        ["ops", "app/ops/loading.tsx"],
+        ["guest", "app/(guest)/loading.tsx"],
+      ];
+      const absent = shells.filter(([, f]) => !existsSync(f)).map(([n]) => n);
+      ok("both shells show a skeleton while a page renders on the server",
+        absent.length === 0, absent.length ? `missing for: ${absent.join(", ")}` : "ops + guest");
+
+      // The spinner must degrade, not freeze. The global reduced-motion rule clamps every
+      // animation to 0.01ms, which would leave a three-quarter ring stuck at an angle —
+      // a broken glyph rather than no glyph.
+      const css = readFileSync("app/globals.css", "utf8");
+      const reduced = css.slice(css.indexOf(".spinner"));
+      ok("the spinner has a reduced-motion form, so it cannot freeze mid-spin",
+        /prefers-reduced-motion[\s\S]{0,400}\.spinner/.test(css),
+        "becomes a steady dot instead of a stuck ring");
+      ok("and the skeleton sheen stops entirely under reduced motion",
+        /prefers-reduced-motion[\s\S]{0,300}\.skeleton[\s\S]{0,120}animation:\s*none/.test(css));
+      void reduced;
 
       const dish = S.menu[0] ? await app(`/menu/${S.menu[0].id}`, { session: S.priya }) : { text: "" };
       ok("and a dish page offers a way to add to it", /Add to order/i.test(dish.text));

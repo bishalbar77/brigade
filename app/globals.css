@@ -181,19 +181,53 @@
     font-size: 1.1875rem;
   }
 
-  /* The ops header is a wordmark, a seven-item tap strip and an account block. At this
-     width they cannot share a line, so the strip gets its own row at full bleed rather
-     than being squeezed into a corner of the first one. */
+  /* The ops header is a wordmark, a seven-section nav and an account block. At this width
+     they cannot share a line, so the nav gets its own row at full bleed rather than being
+     squeezed into a corner of the first one. */
   .ops-header {
     display: grid;
     grid-template-columns: 1fr auto;
     align-items: center;
     gap: var(--space-3);
   }
-  .ops-header > .ops-nav {
+  .ops-header > .ops-nav-narrow {
     grid-column: 1 / -1;
     order: 3;
   }
+}
+
+/*
+ * Ops nav: a tap strip where a wall screen might be, a hamburger where one cannot.
+ *
+ * The strip is correct at two metres with no mouse — everything visible at rest, one tap
+ * to anywhere. It is wrong on a phone, where seven tabs become a horizontal scroll that
+ * hides most of itself and takes a whole row doing it. 640px is the line: no wall-mounted
+ * KDS is narrower, so nothing about the 2m case changes.
+ */
+.ops-nav-wide {
+  display: flex;
+  gap: var(--space-2);
+  flex: 1;
+}
+
+.ops-nav-narrow {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .ops-nav-wide {
+    display: none;
+  }
+  .ops-nav-narrow {
+    display: flex;
+    align-items: center;
+  }
+}
+
+/* The panel sits under the header, which is the ops header's positioning context. */
+.ops-nav-panel {
+  background: var(--color-bg-sunken);
+  border-bottom: 2px solid var(--color-border-strong);
 }
 
 @layer base {
@@ -401,6 +435,91 @@
   margin: var(--space-2) 0;
   border: 0;
   border-top: 1px solid var(--color-border);
+}
+
+/* ── waiting ──────────────────────────────────────────────────────────────
+ *
+ * Almost every write here is a round trip to Postgres and back through a server
+ * component, which is 1–2 seconds on a good connection. Every action site already
+ * tracked a pending flag; what was missing was any visible sign of it. A button that
+ * greys out and keeps its label reads as "broken", and the honest reading of a tap with
+ * no response is that the tap did not land — so people tap again.
+ *
+ * Text is the primary channel and the spinner is the decoration, not the other way
+ * around: `aria-busy` plus a label change is what a screen reader gets, and it is also
+ * what survives `prefers-reduced-motion`.
+ */
+.spinner {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 1em;
+  height: 1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 620ms linear infinite;
+  vertical-align: -0.125em;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/*
+ * The global reduced-motion rule clamps every animation to 0.01ms, which would leave
+ * this as a frozen three-quarter ring — a broken-looking glyph rather than no glyph. So
+ * under reduced motion it stops being a ring and becomes a steady dot: still a visible
+ * "something is happening", with nothing moving.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    border: 0;
+    border-radius: 50%;
+    background: currentColor;
+    width: 0.6em;
+    height: 0.6em;
+    opacity: 0.75;
+  }
+}
+
+/* A button mid-action keeps its size so the row does not reflow under the thumb. */
+[aria-busy="true"] {
+  cursor: progress;
+}
+
+/*
+ * Route-level skeletons. Shown by Next while a dynamic page is being rendered on the
+ * server, which is the other half of the 1–2 seconds: tapping a nav item used to leave
+ * the previous screen sitting there with no indication anything had been asked for.
+ *
+ * Deliberately shaped like the page that is coming rather than a spinner in the middle
+ * of an empty screen — the layout arriving first is what makes the wait feel short.
+ */
+.skeleton {
+  border-radius: var(--radius-md);
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-raised) 0%,
+    color-mix(in oklab, var(--color-bg-raised) 70%, var(--color-fg-subtle)) 50%,
+    var(--color-bg-raised) 100%
+  );
+  background-size: 200% 100%;
+  animation: sheen 1.4s ease-in-out infinite;
+}
+
+@keyframes sheen {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    background: var(--color-bg-raised);
+  }
 }
 
 /* ── the eyebrow: small caps label, used for station / category / role ────── */

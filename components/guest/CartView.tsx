@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Spinner } from "@/components/Busy";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -359,6 +360,7 @@ export function CartView({
           type="button"
           onClick={() => void placeOrder()}
           disabled={busy || problems.length > 0}
+          aria-busy={busy}
           style={{
             width: "100%",
             minHeight: "52px",
@@ -373,7 +375,25 @@ export function CartView({
             cursor: busy ? "progress" : problems.length > 0 ? "not-allowed" : "pointer",
           }}
         >
-          {busy ? "Sending to the kitchen…" : problems.length > 0 ? "Fix the items above" : "Place order"}
+          {busy ? (
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "var(--space-2)",
+              }}
+            >
+              {/* The wording was already right; there was just nothing moving beside it.
+                  place_order() locks rows, re-checks availability and writes the ledger,
+                  so this is a real second or two on a phone in a restaurant. */}
+              <Spinner label="Sending to the kitchen" />
+              Sending to the kitchen…
+            </span>
+          ) : problems.length > 0 ? (
+            "Fix the items above"
+          ) : (
+            "Place order"
+          )}
         </button>
       )}
     </section>

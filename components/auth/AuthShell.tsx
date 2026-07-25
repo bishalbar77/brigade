@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Spinner } from "@/components/Busy";
 
 /*
  * Shared frame for the auth screens.
@@ -96,6 +97,7 @@ export function SubmitButton({
     <button
       type="submit"
       disabled={busy || props.disabled}
+      aria-busy={busy}
       {...props}
       style={{
         width: "100%",
@@ -110,7 +112,25 @@ export function SubmitButton({
         opacity: busy ? 0.7 : 1,
       }}
     >
-      {busy ? "…" : children}
+      {/* Was a bare "…". Signing in, creating an account and verifying a code are all
+          network round trips — the last one waits on an email — so a single ellipsis is the
+          least information this could convey. The idle label is passed in, so the busy
+          state can keep the same words and just add the spinner. */}
+      {busy ? (
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "var(--space-2)",
+          }}
+        >
+          <Spinner label="Working" />
+          {children}…
+        </span>
+      ) : (
+        children
+      )}
     </button>
   );
 }

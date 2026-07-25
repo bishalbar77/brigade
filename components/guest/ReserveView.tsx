@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Spinner } from "@/components/Busy";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -255,6 +256,7 @@ export function ReserveView({
             type="button"
             onClick={() => void book()}
             disabled={busy || !slot}
+            aria-busy={busy}
             style={{
               minHeight: "52px",
               borderRadius: "var(--radius-md)",
@@ -267,7 +269,23 @@ export function ReserveView({
               cursor: busy ? "progress" : slot ? "pointer" : "not-allowed",
             }}
           >
-            {busy ? "…" : slot ? "Confirm booking" : "Pick a time"}
+            {busy ? (
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "var(--space-2)",
+                }}
+              >
+                <Spinner label="Booking your table" />
+                Booking…
+              </span>
+            ) : slot ? (
+              "Confirm booking"
+            ) : (
+              "Pick a time"
+            )}
           </button>
 
           {!inQueue && (

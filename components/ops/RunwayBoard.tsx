@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ActionButton } from "@/components/Busy";
 import { RunwayMeter } from "@/components/runway/RunwayMeter";
 import { STATION_LABEL, type RunwayRow } from "@/lib/ops/tickets";
 import { useRealtimeRefresh } from "@/lib/hooks/useRealtimeRefresh";
@@ -239,23 +240,12 @@ function RunwayRowCard({
 
       {canAdjustStock && row.bindingIngredientId && (
         <div style={{ flex: "0 0 auto", display: "grid", gap: "var(--space-2)" }}>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void topUp(10)}
-            style={{
-              minHeight: "48px",
-              padding: "0 var(--space-4)",
-              borderRadius: "var(--radius-md)",
-              border: "1px solid var(--color-border-strong)",
-              background: "transparent",
-              color: "var(--color-fg)",
-              font: "inherit",
-              cursor: "pointer",
-            }}
-          >
-            {busy ? "…" : "+10 portions"}
-          </button>
+          {/* Was `busy ? "…" : "+10 portions"`. A single ellipsis on a wall screen at two
+              metres is indistinguishable from nothing happening, and the whole round trip
+              — adjust_stock, then a server re-render of the board — is a second or two. */}
+          <ActionButton busy={busy} busyLabel="Adding…" onClick={() => void topUp(10)}>
+            +10 portions
+          </ActionButton>
           {error && (
             <p
               role="alert"

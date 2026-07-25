@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AccountBar } from "@/components/AccountBar";
+import { OpsNav } from "@/components/ops/OpsNav";
 import { getCurrentProfile } from "@/lib/supabase/server";
 
 /*
@@ -8,10 +9,12 @@ import { getCurrentProfile } from "@/lib/supabase/server";
  *
  * Consequences that are structural rather than stylistic:
  *   - no hover-only affordances; everything is visible at rest
- *   - nav is a tap strip, not a dropdown
+ *   - nav is a tap strip, not a dropdown — at wall-screen widths. Below 640px, where no
+ *     wall screen exists, it collapses to one button; see components/ops/OpsNav.tsx
  *   - kitchen vernacular is CORRECT here — the pass, 86, fire, docket are what
  *     staff actually say. Plain language belongs on guest surfaces.
- *   - dense in space, LARGE in type. [data-density="ops"] does both.
+ *   - dense in space, LARGE in type. [data-density="ops"] does both, and globals.css
+ *     scopes the wall-sized end of that to viewports a wall could be.
  */
 
 const NAV = [
@@ -35,10 +38,12 @@ export default async function OpsLayout({ children }: { children: React.ReactNod
       style={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}
     >
       <header
-        // .ops-header lets the narrow-viewport rule give the tap strip its own full-width
-        // row instead of squeezing it beside the wordmark and the account block.
+        // .ops-header lets the narrow-viewport rule give the nav its own full-width row
+        // instead of squeezing it beside the wordmark and the account block. `relative`
+        // so the phone nav panel anchors to the header rather than to the page.
         className="ops-header"
         style={{
+          position: "relative",
           display: "flex",
           alignItems: "center",
           gap: "var(--space-5)",
@@ -62,39 +67,7 @@ export default async function OpsLayout({ children }: { children: React.ReactNod
           Brigade
         </Link>
 
-        {/* Tap strip. No dropdowns — a cook with busy hands gets one tap. */}
-        <nav
-          className="scroll-x ops-nav"
-          style={{ display: "flex", gap: "var(--space-2)", flex: 1 }}
-        >
-          {NAV.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "2px",
-                padding: "var(--space-2) var(--space-4)",
-                minHeight: "52px",
-                justifyContent: "center",
-                borderRadius: "var(--radius-md)",
-                border: "1px solid var(--color-border)",
-                background: "var(--color-bg-raised)",
-                color: "var(--color-fg)",
-                textDecoration: "none",
-                whiteSpace: "nowrap",
-              }}
-            >
-              <span style={{ fontFamily: "var(--font-display)", fontWeight: 600 }}>
-                {item.label}
-              </span>
-              <span className="eyebrow" style={{ fontSize: "0.7rem" }}>
-                {item.hint}
-              </span>
-            </Link>
-          ))}
-        </nav>
+        <OpsNav items={NAV} />
 
         <AccountBar
           name={profile?.full_name as string | null}

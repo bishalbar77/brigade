@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Spinner } from "@/components/Busy";
 import { useRouter } from "next/navigation";
 import {
   NEXT_STATUS,
@@ -188,11 +189,27 @@ export function Docket({ docket, now }: { docket: DocketData; now: number }) {
                 </span>
 
                 {next && action && (
+                  /*
+                   * The whole card used to drop to opacity 0.7 and that was the only sign
+                   * anything had happened — at two metres, through glare, on a screen with
+                   * grease on it, that is no sign at all. A cook who is not sure the tap
+                   * landed taps again, and the second tap is an ILLEGAL_TRANSITION at best
+                   * and the next status at worst.
+                   *
+                   * minWidth is kept from the original so the button does not resize when
+                   * the label changes: a target that moves under a thumb mid-press is how
+                   * the wrong ticket gets fired.
+                   */
                   <button
                     type="button"
                     onClick={() => void advance(item.id, next)}
                     disabled={pending}
+                    aria-busy={pending}
                     style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "var(--space-2)",
                       minHeight: "48px",
                       minWidth: "112px",
                       padding: "0 var(--space-4)",
@@ -203,10 +220,17 @@ export function Docket({ docket, now }: { docket: DocketData; now: number }) {
                       font: "inherit",
                       fontWeight: 600,
                       fontSize: "var(--text-step-0)",
-                      cursor: "pointer",
+                      cursor: pending ? "progress" : "pointer",
                     }}
                   >
-                    {action}
+                    {pending ? (
+                      <>
+                        <Spinner label={`${action}, sending`} />
+                        <span>Sending…</span>
+                      </>
+                    ) : (
+                      action
+                    )}
                   </button>
                 )}
               </div>

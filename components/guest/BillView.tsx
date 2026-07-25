@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Spinner } from "@/components/Busy";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatCents, tipFromPercent } from "@/lib/money";
@@ -219,6 +220,7 @@ export function BillView({
         type="button"
         onClick={() => void pay()}
         disabled={busy || pending.length > 0 || served.length === 0}
+        aria-busy={busy}
         style={{
           width: "100%",
           minHeight: "52px",
@@ -239,7 +241,19 @@ export function BillView({
         }}
       >
         {busy
-          ? "Paying…"
+          ? (
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "var(--space-2)",
+              }}
+            >
+              <Spinner label="Taking the payment" />
+              Paying…
+            </span>
+          )
           : served.length === 0
             ? "Nothing served yet"
             : pending.length > 0

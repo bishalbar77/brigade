@@ -8,6 +8,8 @@ import {
 import type { DishPerformance, Velocity } from "@/lib/runway/types";
 import { createSupabaseServerClient, getCurrentProfile } from "@/lib/supabase/server";
 import { daypartKey } from "@/lib/data/menu";
+import { weekdayOf } from "@/lib/runway/velocity";
+import { resolveTimeZone } from "@/lib/runway/clock";
 import type { Station } from "@/lib/ops/tickets";
 
 /**

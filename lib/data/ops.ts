@@ -1,6 +1,7 @@
 import { byUrgency, runwayFromPortions } from "@/lib/runway/runway";
 import type { RunwayResult, Velocity } from "@/lib/runway/types";
-import { currentDaypart, type DaypartWindow } from "@/lib/runway/velocity";
+import { currentDaypart, weekdayOf, type DaypartWindow } from "@/lib/runway/velocity";
+import { resolveTimeZone } from "@/lib/runway/clock";
 import { createSupabaseServerClient, getCurrentProfile } from "@/lib/supabase/server";
 import { daypartKey, windowsForDate } from "@/lib/data/menu";
 import {
@@ -44,14 +45,15 @@ export async function getKdsData(station: Station | null = null): Promise<KdsPay
 
   const { data: restaurant } = await supabase
     .from("restaurants")
-    .select("id, service_hours")
+    .select("id, timezone, service_hours")
     .limit(1)
     .single();
 
   if (!restaurant) throw new Error("kds: no restaurant");
 
   const now = new Date();
-  const windows = windowsForDate((restaurant.service_hours ?? {}) as never, now);
+  const timeZone = resolveTimeZone(restaurant.timezone as string | null);
+  const windows = windowsForDate((restaurant.service_hours ?? {}) as never, now, timeZone);
 
   const { data: rows, error } = await supabase
     .from("orders")
@@ -96,7 +98,7 @@ export async function getKdsData(station: Station | null = null): Promise<KdsPay
     station,
     role: profile?.role ?? "guest",
     dockets,
-    serviceOpen: currentDaypart(now, windows) !== null,
+    serviceOpen: currentDaypart(now, windows, timeZone) !== null,
   };
 }
 
@@ -107,6 +109,7 @@ export interface RunwayBoardPayload {
   daypart: string | null;
   velocityByDish: Record<string, Velocity>;
   serviceWindows: DaypartWindow[];
+  timeZone: string;
 }
 
 /**
@@ -122,16 +125,17 @@ export async function getRunwayBoard(): Promise<RunwayBoardPayload> {
 
   const { data: restaurant } = await supabase
     .from("restaurants")
-    .select("id, service_hours")
+    .select("id, timezone, service_hours")
     .limit(1)
     .single();
 
   if (!restaurant) throw new Error("runway: no restaurant");
 
   const now = new Date();
-  const windows = windowsForDate((restaurant.service_hours ?? {}) as never, now);
-  const serviceOpen = currentDaypart(now, windows) !== null;
-  const daypart = daypartKey(now);
+  const timeZone = resolveTimeZone(restaurant.timezone as string | null);
+  const windows = windowsForDate((restaurant.service_hours ?? {}) as never, now, timeZone);
+  const serviceOpen = currentDaypart(now, windows, timeZone) !== null;
+  const daypart = daypartKey(now, timeZone);
 
   const [{ data: dishes }, { data: vRows }, { data: binding }] = await Promise.all([
     supabase
@@ -141,7 +145,7 @@ export async function getRunwayBoard(): Promise<RunwayBoardPayload> {
     supabase
       .from("dish_velocity")
       .select("dish_id, ewma_units_per_hour, sample_count")
-      .eq("weekday", now.getDay())
+      .eq("weekday", weekdayOf(now, timeZone))
       .eq("daypart", daypart),
     supabase
       .from("dish_binding_ingredient")
@@ -186,6 +190,7 @@ export async function getRunwayBoard(): Promise<RunwayBoardPayload> {
         globalMeanVelocity,
         serviceWindows: windows,
         now,
+        timeZone,
         bindingIngredientId: bind?.id ?? null,
       }),
       bindingIngredientId: bind?.id ?? null,
@@ -205,6 +210,7 @@ export async function getRunwayBoard(): Promise<RunwayBoardPayload> {
     daypart: serviceOpen ? daypart : null,
     velocityByDish: Object.fromEntries(velocityByDish),
     serviceWindows: windows,
+    timeZone,
   };
 }
 

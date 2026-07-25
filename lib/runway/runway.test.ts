@@ -7,8 +7,16 @@ import {
   isManually86,
   portionsAvailable,
 } from "./availability";
-import { computeRunway, bandFor, byUrgency, runwayMinutes } from "./runway";
-import { computeVelocity, currentDaypart, ewma, isServiceOpen, resolveVelocity } from "./velocity";
+import { computeRunway, bandFor, byUrgency, runwayFromPortions, runwayMinutes } from "./runway";
+import { resolveTimeZone } from "./clock";
+import {
+  computeVelocity,
+  currentDaypart,
+  ewma,
+  isServiceOpen,
+  resolveVelocity,
+  weekdayOf,
+} from "./velocity";
 import {
   analyseMenu,
   classifyDish,
@@ -316,6 +324,84 @@ describe("computeRunway", () => {
   });
 });
 
+// ------------------------------------------------------------- timezone
+
+describe("timezone", () => {
+  /*
+   * An adversarial audit of production caught this: nothing read
+   * restaurants.timezone, so every clock decision ran in the ambient process zone.
+   * On Vercel (UTC) a London restaurant's predicted 86 times came out an hour early,
+   * and near local midnight the WRONG DAY's service windows were selected.
+   *
+   * These fix the frame to a real instant and assert the restaurant's zone decides,
+   * so the bug cannot come back regardless of where the code runs.
+   */
+  const LONDON_WINDOWS = [
+    { name: "lunch", startMinutes: 11 * 60, endMinutes: 16 * 60 },
+    { name: "dinner", startMinutes: 16 * 60, endMinutes: 23 * 60 },
+  ];
+  // 17:46 in London (BST = UTC+1) on Saturday 25 July 2026.
+  const INSTANT = new Date("2026-07-25T16:46:00Z");
+
+  const run = (timeZone: string) =>
+    runwayFromPortions({
+      dishId: "bass",
+      portions: 4,
+      velocity: { unitsPerHour: 2.4074, sampleCount: 6 },
+      globalMeanVelocity: 2,
+      serviceWindows: LONDON_WINDOWS,
+      now: INSTANT,
+      timeZone,
+    });
+
+  it("labels the predicted 86 in the RESTAURANT's zone, not the server's", () => {
+    // 4 portions at 2.4074/hr ≈ 99.7 min. 17:46 London + 100 min = 19:25.
+    expect(run("Europe/London").predicted86Label).toBe("19:25");
+    // Same instant, same maths, one hour earlier on the UTC clock.
+    expect(run("UTC").predicted86Label).toBe("18:25");
+  });
+
+  it("gives the same label wherever the process happens to run", () => {
+    // The label is derived from the zone argument alone, so a UTC server and a
+    // London laptop agree — which is what stops SSR disagreeing with hydration.
+    const a = run("Europe/London").predicted86Label;
+    const b = run("Europe/London").predicted86Label;
+    expect(a).toBe(b);
+    expect(a).toBe("19:25");
+  });
+
+  it("uses the restaurant's clock to decide whether service is even open", () => {
+    // 16:46 UTC is 22:16 in Kolkata — past a 23:00 close but only just; in Auckland
+    // it is 04:46 the NEXT day, comfortably shut. The zone decides, not the server.
+    expect(run("Asia/Kolkata").runwayMinutes).not.toBeNull();
+    expect(run("Pacific/Auckland").runwayMinutes).toBeNull();
+  });
+
+  it("picks the weekday from the restaurant's zone, so window selection can't slip a day", () => {
+    /*
+     * 19:00 UTC — chosen because it straddles a date boundary between the two zones:
+     * London (BST, +1) is 20:00 Saturday and still mid-service, while Kolkata (+5:30)
+     * has already rolled to 00:30 Sunday. Sunday's service hours differ from
+     * Saturday's, so reading the weekday in the wrong zone loads the wrong windows
+     * entirely — which is a different and worse bug than being an hour off.
+     */
+    const duringSaturdayService = new Date("2026-07-25T19:00:00Z");
+    expect(weekdayOf(duringSaturdayService, "Europe/London")).toBe(6); // Sat 20:00
+    expect(weekdayOf(duringSaturdayService, "Asia/Kolkata")).toBe(0); // Sun 00:30
+    // And the ambient-zone reading is whatever the host happens to be — the exact
+    // thing this argument exists to stop mattering.
+    expect(weekdayOf(duringSaturdayService, "UTC")).toBe(6);
+  });
+
+  it("falls back to the host zone rather than silently answering in UTC", () => {
+    // A blank timezone column is a data problem. Answering in UTC would produce
+    // plausible-looking times that are wrong, which is worse than being obviously off.
+    expect(resolveTimeZone(null)).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
+    expect(resolveTimeZone("  ")).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
+    expect(resolveTimeZone("Europe/London")).toBe("Europe/London");
+  });
+});
+
 describe("byUrgency", () => {
   const mk = (
     dishId: string,
@@ -325,7 +411,7 @@ describe("byUrgency", () => {
   ): RunwayResult => ({
     dishId, portions, runwayMinutes: minutes, predicted86At: null,
     band: bandFor(portions, minutes), unlimited: false,
-    insufficientHistory: false, lastsThroughService: false,
+    insufficientHistory: false, lastsThroughService: false, predicted86Label: null,
     bindingIngredientId: null, ...over,
   });
 
@@ -488,7 +574,7 @@ describe("scoreForSteering", () => {
   const runway = (band: RunwayResult["band"], minutes: number | null): RunwayResult => ({
     dishId: "x", portions: 10, runwayMinutes: minutes, predicted86At: null,
     band, unlimited: false, insufficientHistory: false, lastsThroughService: false,
-    bindingIngredientId: null,
+    predicted86Label: null, bindingIngredientId: null,
   });
 
   it("demotes a critical dish below an equivalent plenty dish", () => {

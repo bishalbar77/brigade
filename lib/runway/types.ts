@@ -61,6 +61,14 @@ export interface RunwayResult {
    * service ends.
    */
   lastsThroughService: boolean;
+  /**
+   * "19:25" — already formatted in the RESTAURANT's timezone.
+   *
+   * The client must render this rather than formatting predicted86At itself: a
+   * browser in another zone would print a different time for the same instant, and
+   * the SSR HTML would disagree with the hydrated markup.
+   */
+  predicted86Label: string | null;
   bindingIngredientId: string | null;
 }
 

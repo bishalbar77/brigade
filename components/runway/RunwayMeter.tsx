@@ -40,9 +40,14 @@ const BAND_GLYPH: Record<RunwayBand, string> = {
   out: "✕",
 };
 
-function clockOf(date: Date): string {
-  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-}
+/*
+ * NOTE: there is deliberately no clock formatting in this component.
+ *
+ * It used to call date.getHours() on predicted86At, which formats in the VIEWER's
+ * timezone — so a UTC server and a London browser rendered different times for the
+ * same instant, and SSR disagreed with hydration. The engine now formats it once, in
+ * the restaurant's own zone, and this component only ever prints that string.
+ */
 
 /**
  * Fraction of the time track still filled.
@@ -81,6 +86,7 @@ export function RunwayMeter({
     unlimited,
     insufficientHistory,
     lastsThroughService,
+    predicted86Label,
   } = runway;
   const color = BAND_COLOR[band];
   const glyph = BAND_GLYPH[band];
@@ -125,7 +131,7 @@ export function RunwayMeter({
     insufficientHistory
       ? "not enough history to predict"
       : predicted86At
-        ? `runs out about ${clockOf(predicted86At)}`
+        ? `runs out about ${runway.predicted86Label}`
         : "service closed",
   ].join(", ");
 
@@ -189,7 +195,7 @@ export function RunwayMeter({
              croquettes would run out at 02:19 if service carried on. */
           <span style={{ color: "var(--color-fg-muted)" }}>enough for tonight</span>
         ) : predicted86At ? (
-          <span style={{ color: "var(--color-fg-muted)" }}>86s ~{clockOf(predicted86At)}</span>
+          <span style={{ color: "var(--color-fg-muted)" }}>86s ~{predicted86Label}</span>
         ) : (
           <span style={{ color: "var(--color-fg-subtle)" }}>closed</span>
         )}

@@ -1,7 +1,13 @@
 import { byUrgency, runwayFromPortions } from "@/lib/runway/runway";
 import { scoreForSteering } from "@/lib/runway/steering";
 import type { RunwayResult, Velocity } from "@/lib/runway/types";
-import { currentDaypart, type DaypartWindow } from "@/lib/runway/velocity";
+import {
+  currentDaypart,
+  minutesFromMidnight,
+  weekdayOf,
+  type DaypartWindow,
+} from "@/lib/runway/velocity";
+import { resolveTimeZone } from "@/lib/runway/clock";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 /**
@@ -57,6 +63,8 @@ export interface MenuPayload {
    */
   velocityByDish: Record<string, Velocity>;
   serviceWindows: DaypartWindow[];
+  /** The restaurant's IANA zone — every clock decision downstream must use it. */
+  timeZone: string;
 }
 
 interface ServiceHours {
@@ -68,9 +76,19 @@ const toMinutes = (hhmm: string): number => {
   return (h ?? 0) * 60 + (m ?? 0);
 };
 
-/** Service windows for a given date, from the restaurant's stored hours. */
-export function windowsForDate(hours: ServiceHours, date: Date): DaypartWindow[] {
-  const spans = hours[DAY_KEYS[date.getDay()]!] ?? [];
+/**
+ * Service windows for a given date, from the restaurant's stored hours.
+ *
+ * `timeZone` decides WHICH DAY's hours apply. Getting this wrong is not a cosmetic
+ * hour-offset bug: either side of local midnight the wrong zone selects a different
+ * weekday, so the engine compares "now" against the wrong day's windows entirely.
+ */
+export function windowsForDate(
+  hours: ServiceHours,
+  date: Date,
+  timeZone?: string,
+): DaypartWindow[] {
+  const spans = hours[DAY_KEYS[weekdayOf(date, timeZone)]!] ?? [];
   return spans.map(([start, end], i) => ({
     name: i === 0 && toMinutes(start!) < DINNER_FROM_HOUR * 60 ? "lunch" : "dinner",
     startMinutes: toMinutes(start!),
@@ -78,8 +96,9 @@ export function windowsForDate(hours: ServiceHours, date: Date): DaypartWindow[]
   }));
 }
 
-export function daypartKey(date: Date): string {
-  return date.getHours() < DINNER_FROM_HOUR ? "lunch" : "dinner";
+/** Which velocity bucket applies now, in the restaurant's own clock. */
+export function daypartKey(date: Date, timeZone?: string): string {
+  return minutesFromMidnight(date, timeZone) < DINNER_FROM_HOUR * 60 ? "lunch" : "dinner";
 }
 
 export async function getMenuWithRunway(now: Date = new Date()): Promise<MenuPayload> {
@@ -89,7 +108,7 @@ export async function getMenuWithRunway(now: Date = new Date()): Promise<MenuPay
   // the only place that would take a slug instead.
   const { data: restaurant, error: rErr } = await supabase
     .from("restaurants")
-    .select("id, name, service_hours")
+    .select("id, name, timezone, service_hours")
     .limit(1)
     .single();
 
@@ -97,9 +116,10 @@ export async function getMenuWithRunway(now: Date = new Date()): Promise<MenuPay
     throw new Error(`menu: no restaurant (${rErr?.message ?? "empty"})`);
   }
 
-  const windows = windowsForDate((restaurant.service_hours ?? {}) as ServiceHours, now);
-  const serviceOpen = currentDaypart(now, windows) !== null;
-  const daypart = daypartKey(now);
+  const timeZone = resolveTimeZone(restaurant.timezone as string | null);
+  const windows = windowsForDate((restaurant.service_hours ?? {}) as ServiceHours, now, timeZone);
+  const serviceOpen = currentDaypart(now, windows, timeZone) !== null;
+  const daypart = daypartKey(now, timeZone);
 
   const [{ data: rows, error: mErr }, { data: vRows }, { data: cats }] = await Promise.all([
     supabase
@@ -112,7 +132,7 @@ export async function getMenuWithRunway(now: Date = new Date()): Promise<MenuPay
     supabase
       .from("dish_velocity")
       .select("dish_id, ewma_units_per_hour, sample_count")
-      .eq("weekday", now.getDay())
+      .eq("weekday", weekdayOf(now, timeZone))
       .eq("daypart", daypart),
     supabase
       .from("menu_categories")
@@ -161,6 +181,7 @@ export async function getMenuWithRunway(now: Date = new Date()): Promise<MenuPay
       globalMeanVelocity,
       serviceWindows: windows,
       now,
+      timeZone,
     }),
   }));
 
@@ -175,6 +196,7 @@ export async function getMenuWithRunway(now: Date = new Date()): Promise<MenuPay
     daypart: serviceOpen ? daypart : null,
     velocityByDish: Object.fromEntries(velocityByDish),
     serviceWindows: windows,
+    timeZone,
   };
 }
 

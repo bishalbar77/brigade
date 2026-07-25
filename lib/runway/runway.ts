@@ -1,3 +1,4 @@
+import { zonedClock } from "./clock";
 import { bindingIngredient, isManually86, isUnlimited, portionsAvailable } from "./availability";
 import {
   type DaypartWindow,
@@ -63,6 +64,12 @@ export interface PortionsRunwayInput {
   serviceWindows: readonly DaypartWindow[];
   now?: Date;
   bindingIngredientId?: string | null;
+  /**
+   * The restaurant's IANA zone. Omit ONLY in tests, where the ambient zone is the
+   * intended frame. In production this must be `restaurants.timezone`, or every clock
+   * decision silently answers in the server's zone — which on Vercel is UTC.
+   */
+  timeZone?: string;
 }
 
 /**
@@ -86,6 +93,7 @@ export function runwayFromPortions(input: PortionsRunwayInput): RunwayResult {
     serviceWindows,
     now = new Date(),
     bindingIngredientId = null,
+    timeZone,
   } = input;
 
   const unlimited = isUnlimited(rawPortions);
@@ -93,7 +101,8 @@ export function runwayFromPortions(input: PortionsRunwayInput): RunwayResult {
   // A manual 86 (burnt sauce, fryer down) zeroes availability regardless of stock.
   const portions = manually86 ? 0 : rawPortions;
 
-  const serviceOpen = currentDaypart(now, serviceWindows) !== null;
+  // Every clock decision below is in the RESTAURANT's zone when one is given.
+  const serviceOpen = currentDaypart(now, serviceWindows, timeZone) !== null;
   const { unitsPerHour, insufficientHistory } = resolveVelocity(
     velocity,
     categoryMeanVelocity,
@@ -106,17 +115,31 @@ export function runwayFromPortions(input: PortionsRunwayInput): RunwayResult {
 
   // Does it outlast the night? A prediction past closing is arithmetically correct
   // and useless: nobody needs telling the croquettes would run out at 02:19.
+  // Both sides of this comparison must be in the SAME frame. Evaluating "now" in the
+  // server zone against window minutes that describe the restaurant's local clock is
+  // how a post-close 86 time became reachable in production.
   const endMinutes = serviceEndMinutes(serviceWindows);
   const lastsThroughService =
     minutes !== null && endMinutes !== null
-      ? minutesFromMidnight(now) + minutes > endMinutes
+      ? minutesFromMidnight(now, timeZone) + minutes > endMinutes
       : false;
+
+  const predicted86At = minutes === null ? null : new Date(now.getTime() + minutes * 60_000);
 
   return {
     dishId,
     portions: unlimited && !manually86 ? rawPortions : portions,
     runwayMinutes: minutes,
-    predicted86At: minutes === null ? null : new Date(now.getTime() + minutes * 60_000),
+    predicted86At,
+    // Formatted here, in the restaurant's zone, so no client re-derives it in its own.
+    predicted86Label:
+      predicted86At === null
+        ? null
+        : timeZone
+          ? zonedClock(predicted86At, timeZone)
+          : `${String(predicted86At.getHours()).padStart(2, "0")}:${String(
+              predicted86At.getMinutes(),
+            ).padStart(2, "0")}`,
     band: bandFor(portions, minutes),
     unlimited: unlimited && !manually86,
     insufficientHistory: insufficientHistory && serviceOpen,

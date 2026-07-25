@@ -1,4 +1,5 @@
 import { EWMA_ALPHA, MIN_VELOCITY_SAMPLES, type Velocity } from "./types";
+import { zonedParts } from "./clock";
 
 /**
  * How fast a dish actually sells, segmented by weekday and daypart — because
@@ -55,9 +56,15 @@ export function resolveVelocity(
   return { unitsPerHour: fallback, insufficientHistory: true };
 }
 
-/** Weekday as Postgres/JS agree on it: 0 = Sunday. */
-export function weekdayOf(date: Date): number {
-  return date.getDay();
+/**
+ * Weekday as Postgres/JS agree on it: 0 = Sunday.
+ *
+ * `timeZone` is required for correctness in production — without it this answers in
+ * the ambient process zone, which on a UTC server picks the wrong DAY's service hours
+ * either side of midnight. See lib/runway/clock.ts.
+ */
+export function weekdayOf(date: Date, timeZone?: string): number {
+  return timeZone ? zonedParts(date, timeZone).weekday : date.getDay();
 }
 
 export interface DaypartWindow {
@@ -66,7 +73,8 @@ export interface DaypartWindow {
   endMinutes: number;
 }
 
-export function minutesFromMidnight(date: Date): number {
+export function minutesFromMidnight(date: Date, timeZone?: string): number {
+  if (timeZone) return zonedParts(date, timeZone).minutes;
   return date.getHours() * 60 + date.getMinutes();
 }
 
@@ -77,16 +85,24 @@ export function minutesFromMidnight(date: Date): number {
  * so runway must be suppressed rather than predicting an 86 at 04:00. A board that
  * does that destroys trust in every other number on the screen.
  */
-export function currentDaypart(date: Date, windows: readonly DaypartWindow[]): DaypartWindow | null {
-  const m = minutesFromMidnight(date);
+export function currentDaypart(
+  date: Date,
+  windows: readonly DaypartWindow[],
+  timeZone?: string,
+): DaypartWindow | null {
+  const m = minutesFromMidnight(date, timeZone);
   for (const w of windows) {
     if (m >= w.startMinutes && m < w.endMinutes) return w;
   }
   return null;
 }
 
-export function isServiceOpen(date: Date, windows: readonly DaypartWindow[]): boolean {
-  return currentDaypart(date, windows) !== null;
+export function isServiceOpen(
+  date: Date,
+  windows: readonly DaypartWindow[],
+  timeZone?: string,
+): boolean {
+  return currentDaypart(date, windows, timeZone) !== null;
 }
 
 /**

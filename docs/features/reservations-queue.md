@@ -1,8 +1,8 @@
 # Reservations & walk-in queue
 
-**User story:** US3 (Silver) · **Status:** built (read-only)
+**User story:** US3 (Silver) · **Status:** built
 
-_As deployed:_ `/ops/reservations` + `/reserve`. Turn-time medians shown; seating and no-show actions are not wired.
+_As deployed:_ `/reserve` (guest booking + queue join) and `/ops/reservations` (read-only book). Slots generated from real service_hours in the restaurant's timezone; capacity re-checked server-side; the wait quote comes from real median turn times via `join_queue()`. Seating and no-show actions are not wired.
 
 **Problem it solves:** "Long waiting times for tables." The PS asks for "smart reservations" and "queue
 management" — the *smart* part being that a quoted wait should come from how long tables actually take

@@ -214,6 +214,166 @@ join ingredients i on i.id = ri.ingredient_id;
 comment on view dish_ingredient_names is
   'Ingredient NAMES per dish for the guest dish page. Deliberately carries no qty and no cost — the quantities are the recipe.';
 
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- 7. pay_order() — a guest could not pay their own bill.
+--
+-- Settling a bill has to insert a payment AND move orders.status to 'paid' AND put
+-- the table into 'dirty'. But `orders_write_staff` is the only update policy on
+-- orders, so a guest hitting PostgREST directly could never close their own order —
+-- the billing flow had no path to completion for the person holding the bill.
+--
+-- Definer function with an explicit ownership check, mirroring place_order(): the
+-- guarantee lives in one place rather than being spread across three policies.
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+create or replace function pay_order(
+  p_order_id uuid,
+  p_method   text default 'card',
+  p_tip_cents int  default 0
+) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare
+  v_order      record;
+  v_unserved   int;
+  v_subtotal   int;
+  v_tax_rate   numeric;
+  v_tax        int;
+  v_payment_id uuid;
+begin
+  if auth.uid() is null then
+    raise exception 'NOT_AUTHENTICATED';
+  end if;
+  if p_tip_cents < 0 then
+    raise exception 'BAD_TIP';
+  end if;
+
+  select * into v_order from orders where id = p_order_id;
+  if v_order is null then raise exception 'NOT_FOUND'; end if;
+
+  -- The bill belongs to the guest who placed it, or to staff of that restaurant.
+  if not (
+    v_order.guest_id = auth.uid()
+    or (is_staff() and v_order.restaurant_id = current_restaurant())
+  ) then
+    raise exception 'FORBIDDEN' using detail = 'that is not your bill';
+  end if;
+
+  -- Idempotent: an already-settled order returns its existing payment rather than
+  -- charging twice. Double-tapping "Pay" must not produce two payments.
+  select id into v_payment_id
+    from payments where order_id = p_order_id and status = 'succeeded' limit 1;
+  if v_payment_id is not null then
+    return v_payment_id;
+  end if;
+
+  -- Charging for food that never arrived is the worst possible bug in billing.
+  select count(*) into v_unserved
+    from order_items
+   where order_id = p_order_id and status not in ('served', 'voided');
+  if v_unserved > 0 then
+    raise exception 'ITEMS_NOT_SERVED'
+      using detail = format('%s item(s) still with the kitchen', v_unserved);
+  end if;
+
+  -- Priced from what was actually SERVED, at the price captured on the line.
+  select coalesce(sum(unit_price_cents * qty), 0)::int into v_subtotal
+    from order_items where order_id = p_order_id and status = 'served';
+
+  select tax_rate into v_tax_rate from restaurants where id = v_order.restaurant_id;
+  -- Rounded ONCE, on the total. Per-line rounding produces bills that don't add up.
+  v_tax := round(v_subtotal * coalesce(v_tax_rate, 0));
+
+  insert into payments (order_id, method, amount_cents, status, provider_ref)
+  values (p_order_id, p_method, v_subtotal + v_tax + p_tip_cents, 'succeeded',
+          'simulated-' || substr(p_order_id::text, 1, 8))
+  returning id into v_payment_id;
+
+  update orders
+     set status         = 'paid',
+         closed_at      = now(),
+         subtotal_cents = v_subtotal,
+         tax_cents      = v_tax,
+         tip_cents      = p_tip_cents,
+         total_cents    = v_subtotal + v_tax + p_tip_cents
+   where id = p_order_id;
+
+  -- Closing a bill never frees a table straight to 'open' — someone has to clear it.
+  if v_order.table_id is not null then
+    update tables set status = 'dirty' where id = v_order.table_id;
+  end if;
+
+  return v_payment_id;
+end;
+$$;
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- 8. join_queue() — same shape of gap for the walk-in queue.
+--
+-- queue_insert_own lets a guest insert their own row, but the QUOTE has to be
+-- computed from other parties' rows and historical turn times, which a guest cannot
+-- read. Computing it client-side from visible data would produce a number based on
+-- whatever fraction of the queue that guest happens to be allowed to see.
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+create or replace function join_queue(
+  p_restaurant_id uuid,
+  p_party_size    int,
+  p_guest_name    text default ''
+) returns table (queue_id uuid, position int, quoted_minutes int)
+language plpgsql security definer set search_path = public as $$
+declare
+  v_ahead      int;
+  v_fitting    int;
+  v_median     numeric;
+  v_quote      int;
+  v_id         uuid;
+begin
+  if auth.uid() is null then raise exception 'NOT_AUTHENTICATED'; end if;
+  if p_party_size < 1 or p_party_size > 20 then raise exception 'BAD_PARTY_SIZE'; end if;
+
+  -- One active entry per guest — the unique index enforces it, this is the friendly error.
+  if exists (
+    select 1 from queue_entries
+     where guest_id = auth.uid() and status in ('waiting', 'notified')
+  ) then
+    raise exception 'ALREADY_QUEUED' using detail = 'you are already in the queue';
+  end if;
+
+  select count(*) into v_ahead
+    from queue_entries
+   where restaurant_id = p_restaurant_id
+     and status in ('waiting', 'notified')
+     and party_size >= p_party_size;
+
+  select greatest(count(*), 1) into v_fitting
+    from tables
+   where restaurant_id = p_restaurant_id and seats >= p_party_size;
+
+  -- Median of REAL seated→paid durations for comparable tables. Below 10 samples this
+  -- is not a measurement, so fall back to a stated default rather than dress a guess
+  -- as data.
+  select percentile_cont(0.5) within group (order by extract(epoch from (o.closed_at - o.opened_at)) / 60)
+    into v_median
+    from orders o
+    join tables t on t.id = o.table_id
+   where o.restaurant_id = p_restaurant_id
+     and o.status = 'paid'
+     and o.closed_at is not null
+     and t.seats >= p_party_size
+     and extract(epoch from (o.closed_at - o.opened_at)) / 60 between 1 and 360
+   having count(*) >= 10;
+
+  v_quote := ceil(coalesce(v_median, 75) * ceil(v_ahead::numeric / v_fitting));
+  if v_quote < 5 then v_quote := 5; end if;
+
+  insert into queue_entries (restaurant_id, guest_id, guest_name, party_size, quoted_minutes, status)
+  values (p_restaurant_id, auth.uid(), coalesce(p_guest_name, ''), p_party_size, v_quote, 'waiting')
+  returning id into v_id;
+
+  return query select v_id, v_ahead + 1, v_quote;
+end;
+$$;
+
 commit;
 
 -- ── verify ───────────────────────────────────────────────────────────────────

@@ -2,7 +2,7 @@
 
 **User story:** US3 (Silver) · **Status:** built
 
-_As deployed:_ `/bill/[orderId]`, simulated payment. Split billing is cut (cut-line 2).
+_As deployed:_ `/bill/[orderId]` → `pay_order()`. Prices only SERVED items at the price captured on the line, refuses while anything is still with the kitchen, and is idempotent. Split billing is cut (cut-line 2).
 
 **Problem it solves:** "Manual billing management." A bill should be a derivation of what was actually
 served, not a number a server types into a calculator at the end of the meal.

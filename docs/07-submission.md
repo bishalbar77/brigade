@@ -47,10 +47,10 @@ watching it refuse.
 |---|---|---|
 | Digital menu | `/menu` | ✅ |
 | Live item availability | `dish_availability` view + realtime | ✅ 12s refetch + realtime accelerator |
-| Smart reservations | `/reserve` + queue with quoted wait | ✅ `/reserve` (read-only admin) |
+| Smart reservations | `/reserve` + queue with quoted wait | ✅ `/reserve` — real slots from service hours, server-side capacity check |
 | Order management | `place_order()` atomic RPC | ✅ race verified on live data |
-| Queue management | `/ops/floor`, host surface | ✅ `/ops/reservations` (read-only) |
-| Billing | `/bill/[orderId]` | ✅ simulated payment |
+| Queue management | `join_queue()` + `/ops/reservations` | ✅ quote from real turn-time medians |
+| Billing | `/bill/[orderId]` → `pay_order()` | ✅ served-items-only, idempotent, simulated payment |
 | Customer notifications | `notifications` table + realtime | ❌ cut — tables exist, nothing writes them |
 
 ### US4 — Gold · management dashboard

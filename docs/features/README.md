@@ -10,7 +10,7 @@ an `_As deployed:_` line stating what actually shipped versus what the doc origi
 | [digital-menu.md](digital-menu.md) | US3 | Silver | built | never |
 | [ordering.md](ordering.md) | US3 | Silver | built | never |
 | [order-tracking.md](order-tracking.md) | US3 | Silver | built | keep |
-| [reservations-queue.md](reservations-queue.md) | US3 | Silver | built (read-only) | keep |
+| [reservations-queue.md](reservations-queue.md) | US3 | Silver | built | keep |
 | [billing.md](billing.md) | US3 | Silver | built | split billing = **2** |
 | [kds.md](kds.md) | US4 | Gold | built | **never — this is the demo** |
 | [floor-map.md](floor-map.md) | US4 | Gold | built (read-only) | keep |

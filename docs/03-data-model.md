@@ -141,7 +141,9 @@ dish_velocity(                               -- materialised, refreshed after ea
 
 insights(
   id uuid pk, restaurant_id uuid, kind text, severity int,
-  title text, body text, payload jsonb, acknowledged_at timestamptz, created_at timestamptz )
+  title text, body text, payload jsonb,
+  service_date date,                       -- see note below
+  acknowledged_at timestamptz, created_at timestamptz )
 
 notifications(
   id uuid pk, recipient_id uuid, kind text, title text, body text,
@@ -151,6 +153,22 @@ audit_log(
   id bigint pk, actor_id uuid, entity text, entity_id uuid, action text,
   before jsonb, after jsonb, created_at timestamptz )
 ```
+
+### Why `insights.service_date` is a column, not a cast
+
+Dedupe needs "one insight per kind per subject **per service day**", which wants an index on
+the day. Three reasons that day is stored rather than derived from `created_at`:
+
+1. **`timestamptz::date` is STABLE, not IMMUTABLE** — the result depends on the session
+   `TimeZone`, so Postgres rejects it in an index expression outright.
+2. **Pinning the cast to UTC would be wrong per-tenant.** Restaurants carry a `timezone`, and
+   a UTC-bucketed day splits or merges a late service for anywhere east or west of UTC.
+3. **A service day isn't a calendar day.** A 02:00 insight belongs to the previous night's
+   service, and only the caller knows that.
+
+The generator passes it explicitly; `current_date` is the default. Rows with a null
+`payload->>'subject_id'` don't dedupe against each other — nulls never conflict in a unique
+index — which is fine, because subject-less kinds (`forecast_peak`) are one-per-day already.
 
 ## Derived: `dish_availability`
 

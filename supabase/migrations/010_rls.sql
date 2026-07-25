@@ -37,8 +37,12 @@ create policy profiles_read_colleagues on profiles
   for select using (restaurant_id is not null and restaurant_id = current_restaurant() and is_staff());
 create policy profiles_update_self on profiles
   for update using (id = auth.uid())
-  -- a guest must not be able to promote themselves
-  with check (id = auth.uid() and role = (select role from profiles where id = auth.uid()));
+  -- A guest must not be able to promote themselves: the new role must equal the
+  -- existing one. current_role_of() rather than an inline `select ... from profiles`,
+  -- because a policy on profiles that queries profiles risks
+  -- "infinite recursion detected in policy for relation profiles". The helper is
+  -- security definer, so it bypasses RLS and cannot recurse.
+  with check (id = auth.uid() and role = current_role_of());
 create policy profiles_admin on profiles
   for update using (restaurant_id = current_restaurant() and current_role_of() = 'owner');
 

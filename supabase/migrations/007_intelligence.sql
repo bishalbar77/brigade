@@ -22,16 +22,30 @@ create table insights (
   -- any of the maths. That seam is intentional.
   body            text not null default '',
   payload         jsonb not null default '{}'::jsonb,
+  -- The service day this insight belongs to, as an explicit business fact rather
+  -- than a cast off created_at. Three reasons it's a real column:
+  --   1. timestamptz::date is STABLE, not IMMUTABLE (it depends on the session
+  --      TimeZone), so Postgres refuses it in an index expression.
+  --   2. Restaurants carry a timezone; a UTC-pinned cast would bucket a late
+  --      service onto the wrong calendar day for anywhere east or west of UTC.
+  --   3. A service day is not a calendar day. A 02:00 insight belongs to the
+  --      previous night's service, and only the caller knows that.
+  -- The generator passes it explicitly; current_date is a sane local default.
+  service_date    date not null default current_date,
   acknowledged_at timestamptz,
   created_at      timestamptz not null default now()
 );
 
 create index insights_restaurant_idx on insights (restaurant_id, created_at desc);
 
--- Dedupe key: one insight per kind per subject per service, so a dish oscillating
--- across the critical boundary can't emit a notification storm.
+-- Dedupe key: one insight per kind per subject per service day, so a dish
+-- oscillating across the critical boundary can't emit a notification storm.
+-- All four columns are plain or immutable-expression, so this is indexable.
+-- Note: rows with a null payload->>'subject_id' are not deduped against each
+-- other, since nulls don't conflict in a unique index. That's intended — kinds
+-- without a subject (forecast_peak) are already one-per-day by construction.
 create unique index insights_dedupe_idx on insights (
-  restaurant_id, kind, (payload->>'subject_id'), (created_at::date)
+  restaurant_id, kind, (payload->>'subject_id'), service_date
 ) where acknowledged_at is null;
 
 create table notifications (

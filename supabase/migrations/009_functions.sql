@@ -331,10 +331,12 @@ begin
   select status into v_from from order_items where id = p_item_id;
   if v_from is null then raise exception 'NOT_FOUND'; end if;
 
-  -- legal transitions only
-  v_ok := (v_from, p_to) in (
-    ('placed','fired'), ('fired','cooking'), ('cooking','plated'), ('plated','served')
-  );
+  -- Legal transitions only. Written as explicit comparisons rather than a row
+  -- constructor IN list, so the enum literals coerce unambiguously.
+  v_ok := (v_from = 'placed'  and p_to = 'fired')
+       or (v_from = 'fired'   and p_to = 'cooking')
+       or (v_from = 'cooking' and p_to = 'plated')
+       or (v_from = 'plated'  and p_to = 'served');
 
   if not v_ok then
     raise exception 'ILLEGAL_TRANSITION'

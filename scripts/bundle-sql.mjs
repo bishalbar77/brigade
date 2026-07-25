@@ -31,6 +31,17 @@ const parts = [
   ``,
   `begin;`,
   ``,
+  `-- Fail fast with a readable message if this has already been applied, rather`,
+  `-- than a confusing "type app_role already exists" from halfway down.`,
+  `do $guard$`,
+  `begin`,
+  `  if exists (select 1 from pg_tables where schemaname = 'public' and tablename = 'restaurants') then`,
+  `    raise exception 'Brigade schema is already applied — nothing to do.'`,
+  `      using hint = 'To reapply from scratch: drop schema public cascade; create schema public; then re-run.';`,
+  `  end if;`,
+  `end`,
+  `$guard$;`,
+  ``,
 ];
 
 for (const file of files) {

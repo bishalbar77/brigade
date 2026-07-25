@@ -20,6 +20,17 @@
 
 begin;
 
+-- Fail fast with a readable message if this has already been applied, rather
+-- than a confusing "type app_role already exists" from halfway down.
+do $guard$
+begin
+  if exists (select 1 from pg_tables where schemaname = 'public' and tablename = 'restaurants') then
+    raise exception 'Brigade schema is already applied — nothing to do.'
+      using hint = 'To reapply from scratch: drop schema public cascade; create schema public; then re-run.';
+  end if;
+end
+$guard$;
+
 -- ==========================================================================
 -- 001_extensions.sql
 -- ==========================================================================
@@ -353,16 +364,30 @@ create table insights (
   -- any of the maths. That seam is intentional.
   body            text not null default '',
   payload         jsonb not null default '{}'::jsonb,
+  -- The service day this insight belongs to, as an explicit business fact rather
+  -- than a cast off created_at. Three reasons it's a real column:
+  --   1. timestamptz::date is STABLE, not IMMUTABLE (it depends on the session
+  --      TimeZone), so Postgres refuses it in an index expression.
+  --   2. Restaurants carry a timezone; a UTC-pinned cast would bucket a late
+  --      service onto the wrong calendar day for anywhere east or west of UTC.
+  --   3. A service day is not a calendar day. A 02:00 insight belongs to the
+  --      previous night's service, and only the caller knows that.
+  -- The generator passes it explicitly; current_date is a sane local default.
+  service_date    date not null default current_date,
   acknowledged_at timestamptz,
   created_at      timestamptz not null default now()
 );
 
 create index insights_restaurant_idx on insights (restaurant_id, created_at desc);
 
--- Dedupe key: one insight per kind per subject per service, so a dish oscillating
--- across the critical boundary can't emit a notification storm.
+-- Dedupe key: one insight per kind per subject per service day, so a dish
+-- oscillating across the critical boundary can't emit a notification storm.
+-- All four columns are plain or immutable-expression, so this is indexable.
+-- Note: rows with a null payload->>'subject_id' are not deduped against each
+-- other, since nulls don't conflict in a unique index. That's intended — kinds
+-- without a subject (forecast_peak) are already one-per-day by construction.
 create unique index insights_dedupe_idx on insights (
-  restaurant_id, kind, (payload->>'subject_id'), (created_at::date)
+  restaurant_id, kind, (payload->>'subject_id'), service_date
 ) where acknowledged_at is null;
 
 create table notifications (
@@ -774,10 +799,12 @@ begin
   select status into v_from from order_items where id = p_item_id;
   if v_from is null then raise exception 'NOT_FOUND'; end if;
 
-  -- legal transitions only
-  v_ok := (v_from, p_to) in (
-    ('placed','fired'), ('fired','cooking'), ('cooking','plated'), ('plated','served')
-  );
+  -- Legal transitions only. Written as explicit comparisons rather than a row
+  -- constructor IN list, so the enum literals coerce unambiguously.
+  v_ok := (v_from = 'placed'  and p_to = 'fired')
+       or (v_from = 'fired'   and p_to = 'cooking')
+       or (v_from = 'cooking' and p_to = 'plated')
+       or (v_from = 'plated'  and p_to = 'served');
 
   if not v_ok then
     raise exception 'ILLEGAL_TRANSITION'
@@ -841,8 +868,12 @@ create policy profiles_read_colleagues on profiles
   for select using (restaurant_id is not null and restaurant_id = current_restaurant() and is_staff());
 create policy profiles_update_self on profiles
   for update using (id = auth.uid())
-  -- a guest must not be able to promote themselves
-  with check (id = auth.uid() and role = (select role from profiles where id = auth.uid()));
+  -- A guest must not be able to promote themselves: the new role must equal the
+  -- existing one. current_role_of() rather than an inline `select ... from profiles`,
+  -- because a policy on profiles that queries profiles risks
+  -- "infinite recursion detected in policy for relation profiles". The helper is
+  -- security definer, so it bypasses RLS and cannot recurse.
+  with check (id = auth.uid() and role = current_role_of());
 create policy profiles_admin on profiles
   for update using (restaurant_id = current_restaurant() and current_role_of() = 'owner');
 
@@ -1057,23 +1088,56 @@ comment on view menu_public is
 --   restaurant:{id}:floor         tables, orders   → floor map, host
 --   restaurant:{id}:availability  ingredients      → guest menus, runway board
 --   order:{id}                    order_items      → that guest's tracking screen
+--
+-- Written defensively rather than as bare `alter publication ... add table`,
+-- because how Supabase provisions supabase_realtime varies: if it were created
+-- FOR ALL TABLES, an explicit add errors out and takes the whole migration with it.
 
-alter publication supabase_realtime add table order_items;
-alter publication supabase_realtime add table orders;
-alter publication supabase_realtime add table tables;
-alter publication supabase_realtime add table queue_entries;
-alter publication supabase_realtime add table notifications;
+do $$
+declare
+  v_all_tables boolean;
+  v_tbl        text;
+begin
+  select puballtables into v_all_tables
+    from pg_publication
+   where pubname = 'supabase_realtime';
 
--- ingredients drives availability: when stock moves, dependent dishes' portions
--- change, so guest menus and the runway board recompute from this.
-alter publication supabase_realtime add table ingredients;
+  if v_all_tables is null then
+    -- unusual on Supabase, but harmless to create
+    execute 'create publication supabase_realtime';
+    v_all_tables := false;
+  end if;
+
+  if v_all_tables then
+    raise notice 'supabase_realtime is FOR ALL TABLES — every table is already published';
+    return;
+  end if;
+
+  for v_tbl in
+    select unnest(array[
+      'order_items', 'orders', 'tables', 'queue_entries', 'notifications', 'ingredients'
+    ])
+  loop
+    if not exists (
+      select 1
+        from pg_publication_rel pr
+        join pg_publication p on p.oid = pr.prpubid
+        join pg_class       c on c.oid = pr.prrelid
+       where p.pubname = 'supabase_realtime'
+         and c.relname = v_tbl
+    ) then
+      execute format('alter publication supabase_realtime add table public.%I', v_tbl);
+    end if;
+  end loop;
+end
+$$;
 
 -- REPLICA IDENTITY FULL so update payloads carry the previous row too — needed to
 -- tell "crossed into the critical band" from "was already critical", which is what
 -- prevents a notification storm.
-alter table order_items    replica identity full;
-alter table ingredients    replica identity full;
-alter table tables         replica identity full;
-alter table queue_entries  replica identity full;
+alter table order_items   replica identity full;
+alter table ingredients   replica identity full;
+alter table tables        replica identity full;
+alter table queue_entries replica identity full;
 
 commit;

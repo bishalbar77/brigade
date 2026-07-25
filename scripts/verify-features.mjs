@@ -1126,6 +1126,52 @@ async function main() {
     },
   });
 
+  await feature({
+    docs: [],
+    title: "Is it fast enough to demo?",
+    plain: "In plain English: a screen that takes fifteen seconds is broken even if every " +
+      "number on it is right. This times every page and fails if any is slow enough to " +
+      "lose a room.",
+    run: async (ok) => {
+      /*
+       * This block exists because /ops/analytics shipped at 15.3 SECONDS and nothing
+       * noticed. Every functional check passed — the food-cost figure was correct, the
+       * matrix had four populated quadrants — because none of them looked at the clock.
+       *
+       * The cause was RLS evaluated per row (patch 007), and the reason it went unseen is
+       * instructive: measured with the service key the same query took 399ms, because the
+       * service key bypasses the policies that were the entire problem. A performance
+       * check has to run as a real person for the same reason a security check does.
+       */
+      const ROUTES = [
+        ["/", null], ["/menu", null], ["/reserve", null], ["/cart", "priya"],
+        ["/ops/kds", "grill"], ["/ops/runway", "manager"], ["/ops/floor", "server"],
+        ["/ops/inventory", "manager"], ["/ops/menu", "manager"],
+        ["/ops/reservations", "host"], ["/ops/analytics", "owner"],
+      ];
+      // Generous on purpose: this is a cold serverless function talking to Postgres in
+      // another region, and the point is to catch 15s, not to police 800ms.
+      const BUDGET = 5000;
+      const slow = [];
+      const timings = [];
+      for (const [path, who] of ROUTES) {
+        const runs = [];
+        // Twice, keeping the better: the first hit may pay a cold start that a judge
+        // clicking around will not.
+        for (let i = 0; i < 2; i++) {
+          const t0 = Date.now();
+          await app(path, { session: who ? S[who] : undefined });
+          runs.push(Date.now() - t0);
+        }
+        const best = Math.min(...runs);
+        timings.push(`${path} ${best}ms`);
+        if (best > BUDGET) slow.push(`${path} ${best}ms`);
+      }
+      ok(`every page answers within ${BUDGET / 1000}s`, slow.length === 0,
+        slow.length ? `TOO SLOW: ${slow.join(", ")}` : timings.join(" · "));
+    },
+  });
+
   // 15 ────────────────────────────────────────────────────────────────────────
   await feature({
     docs: [],

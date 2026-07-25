@@ -18,6 +18,7 @@ leave it.
 | 6 | [06-roadmap.md](06-roadmap.md) | You need the schedule, the cut line, or the risk register |
 | 7 | [07-submission.md](07-submission.md) | You're checking rubric coverage or building the deck |
 | 8 | [08-runbook.md](08-runbook.md) | You're setting up, deploying, or running the demo |
+| 9 | [09-flows.md](09-flows.md) | **You want to walk the app as each of the ten people, and prove each step works** |
 
 Per-feature docs live in [features/](features/) — one file per feature, all on the same template,
 each carrying a `Status: planned | built | cut` field. **Status fields must match reality**; a docs

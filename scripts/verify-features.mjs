@@ -809,9 +809,31 @@ async function main() {
       // so "86s ~<!-- -->21:44" is what actually reaches the browser.
       const times = [...dom.matchAll(/86s ~(?:<!--\s*-->)?(\d{2}):(\d{2})/g)];
       const count = (s) => dom.split(s).length - 1;
-      if (serviceOpen) {
+      /*
+       * Is there anything left that COULD count down?
+       *
+       * This check used to assert "service is open, therefore there is a prediction", and
+       * it failed — for a reason that was my own doing. The ordering and race blocks above
+       * deliberately buy every remaining portion of the scarcest dish, so by the time this
+       * block runs the two prawn dishes are at zero and everything else genuinely lasts
+       * until closing. A prediction only exists for a dish that will run out DURING
+       * service, so there was correctly nothing to predict.
+       *
+       * The test was asserting on state it had itself destroyed two blocks earlier. So the
+       * precondition is now read from the database at this moment rather than assumed: a
+       * clock time is required only when a dish is actually both open and finite.
+       */
+      const { body: avail } = await db(
+        "dish_availability?select=portions,unlimited&unlimited=is.false&portions=gt.0&portions=lte.12");
+      const couldCountDown = (avail?.length ?? 0) > 0;
+
+      if (serviceOpen && couldCountDown) {
         ok("it predicts clock times, not just counts", times.length > 0,
           times.length ? `${times.length} predictions, first at ${times[0][1]}:${times[0][2]}` : "no prediction on the page");
+      } else if (serviceOpen) {
+        ok("nothing is close enough to predict, and it says so rather than inventing one",
+          times.length === 0,
+          "no dish is both in stock and scarce right now — this test's own ordering used them up");
       } else {
         // The positive form of the same rule: with the kitchen shut there must be NO
         // clock time on the board. This is the check that would have caught the board
@@ -841,8 +863,11 @@ async function main() {
       const spoken = (dom.match(/aria-label="\d+ portions? left, runs out about/g) ?? []).length;
       // Gauges only exist where there is something to count down, so during service this
       // asserts they are all labelled; outside it, that none shipped unlabelled.
+      // Gauges exist only where something is counting down, so the "at least one" half of
+      // this is conditional on the same precondition as the prediction check above. The
+      // half that always holds is that no gauge ships without its spoken label.
       ok("every gauge is written out for a screen reader",
-        atRisk === labelled && (serviceOpen ? atRisk > 0 : true),
+        atRisk === labelled && (serviceOpen && couldCountDown ? atRisk > 0 : true),
         `${atRisk} gauges, ${labelled} labelled`);
       ok("and the spoken prediction says the same as the visible one",
         spoken === times.length, `${times.length} on screen, ${spoken} spoken`);

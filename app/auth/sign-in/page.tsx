@@ -129,7 +129,24 @@ export default function SignInPage() {
   return (
     <Suspense
       fallback={
-        <AuthShell title="Sign in">
+        /*
+         * The footer is repeated here on purpose.
+         *
+         * `useSearchParams` puts the whole form behind this boundary, so the PRERENDERED
+         * html is the fallback — and the fallback had no footer. "Create one" is the only
+         * link to /auth/sign-up in the entire app, so until JavaScript arrived there was
+         * no way for a new person to reach the sign-up page at all. Caught by the
+         * orphan-route check in verify:features, which greps rendered HTML rather than
+         * trusting that a link exists somewhere in the source.
+         */
+        <AuthShell
+          title="Sign in"
+          footer={
+            <>
+              No account? <AuthLink href="/auth/sign-up">Create one</AuthLink>
+            </>
+          }
+        >
           <AuthFormSkeleton fields={2} />
         </AuthShell>
       }

@@ -37,16 +37,37 @@ export function RunwayBoard({
 }) {
   const { live } = useRealtimeRefresh(`restaurant:${restaurantId}:runway`, RUNWAY_TABLES);
 
-  const going = rows.filter((r) => ["out", "critical", "low"].includes(r.runway.band));
+  /*
+   * The top group means "will run out during service" — which is not the same as the
+   * band, and grouping by band was wrong.
+   *
+   * Bands are thresholds on remaining minutes: critical under 45, low under 120, plenty
+   * above. Service can be far longer than 120 minutes. Measured on real seeded data:
+   * butter chicken at 6 portions selling 1.74/hr has 207 minutes left, so it is banded
+   * `plenty` — and at 16:00 it runs out at 19:27, four hours before closing. Grouping by
+   * band filed it under "Comfortable · enough for tonight", which is a plain false
+   * statement about a dish the kitchen needed to prep more of.
+   *
+   * `lastsThroughService` is the field the engine computes for exactly this question, and
+   * the board was ignoring it. Same mistake as the hardcoded label fixed earlier: deciding
+   * a claim from the nearest available value rather than the one that means it.
+   *
+   * A band still decides how LOUD a row is — the card border and ordering — it just no
+   * longer decides whether the row is a concern at all.
+   */
+  const willRunOut = (r: RunwayRow) =>
+    r.runway.band === "out" ||
+    (!r.runway.unlimited && !r.runway.insufficientHistory && !r.runway.lastsThroughService &&
+      r.runway.predicted86At !== null) ||
+    ["critical", "low"].includes(r.runway.band);
+
+  const going = rows.filter(willRunOut);
   const noPrediction = rows.filter(
-    (r) => !r.runway.unlimited && r.runway.insufficientHistory && r.runway.band === "plenty",
+    (r) => !r.runway.unlimited && r.runway.insufficientHistory && !willRunOut(r),
   );
   const unlimited = rows.filter((r) => r.runway.unlimited);
   const comfortable = rows.filter(
-    (r) =>
-      r.runway.band === "plenty" &&
-      !r.runway.unlimited &&
-      !r.runway.insufficientHistory,
+    (r) => !r.runway.unlimited && !r.runway.insufficientHistory && !willRunOut(r),
   );
 
   return (

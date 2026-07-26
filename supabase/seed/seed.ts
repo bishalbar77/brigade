@@ -448,11 +448,42 @@ async function main(): Promise<void> {
    * board actionable.
    */
   const NEAR_86: Record<string, number> = {
-    // 0.75kg of prawns left. Tandoori prawns use 0.18/portion → 4 left; kadai prawns
-    // use 0.16 → 4 as well. One ingredient capping TWO dishes is deliberate: order a
-    // tandoori prawn and the kadai countdown moves too, which is the per-ingredient
-    // demand aggregation in place_order() made visible on screen.
-    "Tiger prawns": 0.75,
+    /*
+     * A COUNTDOWN NEEDS A FAST SELLER, not just a low count.
+     *
+     * The first version of this list pinned only the prawns and the goat — the three
+     * dearest things on the menu, and therefore the three that barely sell. Measured
+     * against real seeded velocity at 16:00 with seven hours of service left:
+     *
+     *   tandoori prawns   4 portions @ 0.15/hr → 1621 min
+     *   rogan josh        7 portions @ 0.41/hr → 1031 min
+     *   butter chicken   64 portions @ 1.74/hr → 2206 min
+     *
+     * Nothing ran out before closing, so the board correctly said "enough for tonight"
+     * for all 28 dishes and the signature screen had nothing to count down. The engine
+     * was right and the DATA was wrong: runway is portions ÷ rate, and I had made the
+     * scarce dishes the slow ones. Scarcity in portions is not scarcity in time.
+     *
+     * So the constraint now sits on the busiest dish on the menu. Chicken thigh binds
+     * butter chicken (1.74/hr, the highest weight here) at 6 portions and murgh malai
+     * tikka at 5 — roughly 3.5 hours, which lands a predicted 86 in the middle of dinner
+     * service where a demo can point at it. It is also the more honest story: the thing
+     * you run out of is the thing everyone is ordering.
+     */
+    "Chicken thigh, boneless": 1.3,
+    /*
+     * The prawns stay pinned, one portion lower, for a different job: at 3 portions
+     * `bandFor` forces critical regardless of sell rate (portions <= 3), so there is a red
+     * row on the board at ANY hour — including outside service, when predictions are
+     * correctly suppressed and every time-based band falls back to plenty. One row that
+     * cannot go quiet is worth having on the screen the whole product is judged on.
+     *
+     * 0.55kg: tandoori prawns use 0.18/portion → 3 left; kadai prawns 0.16 → 3 as well.
+     * One ingredient capping TWO dishes is deliberate — order a tandoori prawn and the
+     * kadai countdown moves too, which is the per-ingredient demand aggregation in
+     * place_order() made visible on screen.
+     */
+    "Tiger prawns": 0.55,
     // 2.2kg of goat. Rogan josh takes 0.28/portion → 7; the biryani takes 0.25 → 8. The
     // same shortage, two different numbers, because the recipes are different — which is
     // the whole argument for computing availability from the BOM instead of storing a flag.

@@ -179,8 +179,22 @@ async function main() {
     .slice(0, 6);
 
   for (const { name, r } of urgent) {
-    const eta = r.predicted86At
-      ? `86s ~${String(r.predicted86At.getHours()).padStart(2, "0")}:${String(r.predicted86At.getMinutes()).padStart(2, "0")}`
+    /*
+     * Mirror what the BOARD says, not the raw field.
+     *
+     * This line printed `86s ~12:25` for the prawns: 3 portions at 0.15/hr is twenty hours
+     * out, so the timestamp is tomorrow lunchtime and an HH:MM label makes it read as
+     * today. The product never shows that — RunwayMeter checks lastsThroughService first
+     * and says "enough for tonight" — but this is the diagnostic someone reads before a
+     * demo, and a diagnostic that contradicts the screen is worse than no diagnostic.
+     *
+     * Also uses the engine's own zoned label rather than getHours(), which is the server's
+     * timezone and was a second way for this line to disagree with the board.
+     */
+    const eta = r.lastsThroughService
+      ? "enough for tonight"
+      : r.predicted86At && r.predicted86Label
+      ? `86s ~${r.predicted86Label}`
       : open ? "no prediction" : "service closed — portions only";
     console.log(`  ${r.band.toUpperCase().padEnd(8)} ${String(r.portions).padStart(3)} left  ${name.padEnd(34)} ${eta}` +
       (r.bindingIngredientId ? `  ← ${ingName.get(r.bindingIngredientId)}` : ""));
@@ -201,13 +215,41 @@ async function main() {
   check(scarceByEngine.length > 0, "the pantry has genuinely scarce dishes",
     `${scarceByEngine.length} at 12 portions or fewer — the board has something to count down`);
 
+  /*
+   * Assert the RULES, not an outcome.
+   *
+   * This used to say "service is open, therefore some dish is banded low or critical", and
+   * it failed on data that was entirely correct. A band is a threshold on remaining MINUTES
+   * (critical under 45, low under 120) — so a dish with few portions and a slow sell rate is
+   * legitimately `plenty`. Scarcity in portions is not scarcity in time, and the assertion
+   * confused the two.
+   *
+   * What is always true, and is what the engine actually promises:
+   */
+  const forcedCritical = results.filter((x) => !x.r.unlimited && x.r.portions > 0 && x.r.portions <= 3);
+  check(forcedCritical.every((x) => x.r.band === "critical"),
+    "3 portions or fewer is always critical, whatever the sell rate",
+    `${forcedCritical.length} at or under 3 portions`);
+
+  const predictable = results.filter(
+    (x) => !x.r.unlimited && !x.r.insufficientHistory && x.r.portions > 0);
   if (serviceOpen) {
-    check(urgent.length > 0, "engine bands them low/critical while service is open",
-      `${urgent.length} banded`);
+    check(predictable.every((x) => x.r.runwayMinutes !== null),
+      "every stocked dish with history gets a prediction while service is open",
+      `${predictable.length} dishes`);
+    // And the differentiator itself: something must actually be forecast to run out
+    // tonight, or the runway board has nothing to say.
+    const tonight = results.filter((x) => x.r.predicted86At !== null && !x.r.lastsThroughService);
+    check(tonight.length > 0, "at least one dish is forecast to run out DURING service",
+      tonight.length
+        ? tonight.map((x) => `${x.name} ${x.r.predicted86Label}`).slice(0, 3).join(", ")
+        : "nothing 86s before closing — the board will have no countdown to show");
   } else {
-    console.log("  ─ banding not asserted: service is closed, so predictions are " +
-      "correctly suppressed and every band falls back to portions");
+    check(predictable.every((x) => x.r.runwayMinutes === null),
+      "no dish is given a prediction while the kitchen is shut",
+      "velocity is meaningless outside service, so the engine suppresses it");
   }
+  void urgent;
   check(results.every((x) => !x.r.unlimited || x.r.runwayMinutes === null),
     "unlimited dishes never get a finite runway");
   check(results.every((x) => x.r.portions >= 0), "no negative portions");

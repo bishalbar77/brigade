@@ -74,6 +74,30 @@ export function TrackingRail({
         </p>
       </header>
 
+      {items.length === 0 && (
+        /*
+         * An order with no readable items rendered an empty list under a header that still
+         * said "In the kitchen", and the "View bill" block never appeared because allServed
+         * requires at least one live line. A silent blank screen, on the page a diner opens
+         * to be reassured. It is a narrow case — a fully-voided order, or items not yet
+         * visible — but "nothing at all" is the one thing this screen must never show.
+         */
+        <p
+          style={{
+            border: "1px dashed var(--color-border-strong)",
+            borderRadius: "var(--radius-md)",
+            padding: "var(--space-5)",
+            color: "var(--color-fg-muted)",
+          }}
+        >
+          There is nothing on this order. If you have just placed it, give it a moment —
+          otherwise it may have been cancelled.{" "}
+          <Link href="/orders" style={{ color: "var(--color-accent)" }}>
+            See your other orders &rarr;
+          </Link>
+        </p>
+      )}
+
       <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: "var(--space-4)" }}>
         {items.map((item) => {
           const voided = item.status === "voided";

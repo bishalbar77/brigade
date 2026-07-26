@@ -86,7 +86,20 @@ export function BillView({
           {tableLabel ? ` for table ${tableLabel}` : ""}. Thanks for coming in.
         </p>
         <Link href="/menu" style={{ color: "var(--color-accent)" }}>
-          Back to the menu →
+          Back to the menu &rarr;
+        </Link>
+        <Link
+          href="/orders"
+          style={{
+            display: "inline-block",
+            marginTop: "var(--space-3)",
+            color: "var(--color-fg-muted)",
+          }}
+        >
+          {/* Before this, a settled bill had one way out and it forgot the order existed.
+              The receipt is re-readable at this URL forever, but nothing pointed back to
+              it — so "where did my bill go" had no answer inside the product. */}
+          All your orders &rarr;
         </Link>
       </section>
     );
@@ -127,6 +140,29 @@ export function BillView({
           <strong>Still with the kitchen.</strong>{" "}
           {pending.length} item{pending.length === 1 ? "" : "s"} haven&rsquo;t been served yet, so
           they&rsquo;re not on this bill. You can settle up once everything has arrived.
+        </p>
+      )}
+
+      {served.length === 0 && pending.length === 0 && (
+        /*
+         * Nothing served and nothing pending — every line was voided. The pay button read
+         * "Nothing served yet" and was disabled, the line list rendered empty, and the page
+         * carried no link at all. A genuine dead end whose only exit was the browser.
+         */
+        <p
+          style={{
+            border: "1px dashed var(--color-border-strong)",
+            borderRadius: "var(--radius-md)",
+            padding: "var(--space-5)",
+            marginBottom: "var(--space-5)",
+            color: "var(--color-fg-muted)",
+          }}
+        >
+          There is nothing to pay for on this order — every item was cancelled, so you
+          have not been charged.{" "}
+          <Link href="/orders" style={{ color: "var(--color-accent)" }}>
+            See your other orders &rarr;
+          </Link>
         </p>
       )}
 

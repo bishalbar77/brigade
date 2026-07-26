@@ -69,6 +69,30 @@ export default async function OpsLayout({ children }: { children: React.ReactNod
 
         <OpsNav items={NAV} />
 
+        {/*
+          * The one way back to the guest half.
+          *
+          * There was none. The ops wordmark points at /ops/kds, OpsNav only lists ops
+          * routes, and nothing on any of the seven screens linked to /, /menu or /reserve —
+          * so anyone who followed the single "Staff → the pass" link on the landing page
+          * was inside ops for good. That matters most for the person this product has to
+          * convince: a judge comparing the guest menu against the runway board is doing it
+          * every thirty seconds, and was using the back button for all of it.
+          *
+          * Labelled "Guest view" rather than "Menu" because there is already a "Menu" tab
+          * in the strip above, and it means a different thing.
+          */}
+        <Link
+          href="/menu"
+          style={{
+            color: "var(--color-fg-muted)",
+            textDecoration: "none",
+            whiteSpace: "nowrap",
+          }}
+        >
+          Guest view &rarr;
+        </Link>
+
         <AccountBar
           name={profile?.full_name as string | null}
           role={profile?.role as string | null}

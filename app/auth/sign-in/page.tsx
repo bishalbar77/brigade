@@ -19,6 +19,13 @@ function SignInForm() {
   const router = useRouter();
   const params = useSearchParams();
   const returnTo = params.get("returnTo");
+  /*
+   * /auth/callback redirects failures here with ?error=…, e.g. "That sign-in link didn't
+   * work. It may have expired — try again." Nothing read it, so the message was thrown
+   * away and the person was shown a blank form with no idea why they were back on it.
+   * A magic link that silently fails is indistinguishable from one that was never sent.
+   */
+  const linkError = params.get("error");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -86,7 +93,8 @@ function SignInForm() {
         </>
       }
     >
-      {error && <ErrorNote>{error}</ErrorNote>}
+      {/* A failed sign-in attempt takes precedence over a stale link error. */}
+      {(error ?? linkError) && <ErrorNote>{error ?? linkError}</ErrorNote>}
 
       <form onSubmit={signIn} noValidate>
         <Field

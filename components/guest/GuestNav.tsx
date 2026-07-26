@@ -73,6 +73,13 @@ export function GuestNav({ name }: { name: string | null | undefined }) {
         <Link href="/reserve" style={{ color: "var(--color-fg-muted)", textDecoration: "none" }}>
           Book
         </Link>
+        {/* Only shown when signed in: there is nothing behind it otherwise, and a link
+            that leads to "sign in first" is a link that wasted a tap. */}
+        {firstName && (
+          <Link href="/orders" style={{ color: "var(--color-fg-muted)", textDecoration: "none" }}>
+            Orders
+          </Link>
+        )}
         <CartLink />
         {firstName ? (
           <span style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
@@ -169,6 +176,7 @@ export function GuestNav({ name }: { name: string | null | undefined }) {
         <div className="nav-panel" id="guest-nav-panel" ref={panelRef} role="group" aria-label="Main">
           <Link href="/menu">Menu</Link>
           <Link href="/reserve">Book a table</Link>
+          {firstName && <Link href="/orders">Your orders</Link>}
           <hr />
           {firstName ? (
             <>

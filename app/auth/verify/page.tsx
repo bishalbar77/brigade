@@ -31,6 +31,10 @@ function VerifyForm() {
   const router = useRouter();
   const params = useSearchParams();
   const email = params.get("email") ?? "";
+  // Honoured here as it already is on sign-in. Without it, verifying sent everyone to
+  // ROLE_HOME — so a diner who came from the cart with a full basket was deposited on
+  // /menu and had to find their way back to it.
+  const returnTo = params.get("returnTo");
 
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -67,7 +71,7 @@ function VerifyForm() {
       .eq("id", data.user!.id)
       .single();
 
-    router.replace(homeFor(profile?.role) as never);
+    router.replace((returnTo ?? homeFor(profile?.role)) as never);
     router.refresh();
   }
 

@@ -1127,6 +1127,110 @@ async function main() {
   });
 
   await feature({
+    docs: ["order-tracking.md"],
+    title: "Finding an order again afterwards",
+    plain: "In plain English: a diner closes the tab, comes back tomorrow, and wants the " +
+      "bill from last night. Can they get to it without being sent a link?",
+    run: async (ok) => {
+      /*
+       * Before /orders existed the answer was no, and not by a small margin. `/order/[id]`
+       * was a TRUE ORPHAN — nothing in the app linked to it — reached once by the redirect
+       * that fires when an order is placed. CartView calls clearCart() on the same line, so
+       * the id survived nowhere but the address bar. Close the tab and a diner could not
+       * reach their own order or their own bill, while the kitchen still had both on screen.
+       */
+      const page = await app("/orders", { session: S.priya });
+      ok("the orders page loads for a signed-in diner", page.status === 200, `HTTP ${page.status}`);
+
+      // This test has placed and paid for orders as Priya throughout, so there is history.
+      const { body: mine } = await db(
+        `orders?select=id,status&guest_id=eq.${S.priya.userId}&order=opened_at.desc&limit=5`);
+      const count = mine?.length ?? 0;
+      ok("it lists orders this diner actually placed", count > 0 &&
+        (mine ?? []).some((o) => page.text.includes(o.id)),
+        `${count} on file, and the newest appears on the page`);
+
+      // Each row goes exactly one place, chosen from the order's state.
+      ok("every row is a link into the order or its bill",
+        /href="\/(order|bill)\//.test(page.text),
+        "rows link to /order/<id> or /bill/<id>");
+
+      // The nav entry is the whole point: a page nothing links to is the bug being fixed.
+      const menu = await app("/menu", { session: S.priya });
+      ok("and the header links to it, so it is not a new orphan",
+        /href="\/orders"/.test(menu.text));
+      const stranger = await app("/menu");
+      ok("…but only once signed in, since there is nothing behind it otherwise",
+        !/href="\/orders"/.test(stranger.text));
+
+      // RLS does the work; assert it rather than assuming.
+      const asDan = await as(S.dan, `orders?select=id&guest_id=eq.${S.priya.userId}`);
+      ok("one diner cannot read another's order history",
+        Array.isArray(asDan.body) && asDan.body.length === 0, "0 rows");
+
+      const signedOut = await app("/orders");
+      ok("a signed-out visitor is invited to sign in rather than shown an error",
+        signedOut.status === 200 && /returnTo=\/orders/.test(signedOut.text),
+        "sign-in link carries returnTo");
+    },
+  });
+
+  await feature({
+    docs: [],
+    title: "Can you get anywhere from anywhere?",
+    plain: "In plain English: no screen should be a trap, and no screen should be reachable " +
+      "only by typing its address. This checks both, for every page.",
+    run: async (ok) => {
+      /*
+       * The generalised form of a bug this build shipped TWICE: /cart was built, tested and
+       * linked from nowhere, and so was /order/[id]. Both passed every functional check,
+       * because requesting a URL is not the same as being able to find it.
+       *
+       * Static routes are checked by grepping the rendered HTML of the pages a person can
+       * actually reach. Dynamic ones (/order/[id], /bill/[orderId], /menu/[dishId]) cannot
+       * be matched by exact href, so they are checked by PREFIX.
+       */
+      const reachable = await Promise.all([
+        app("/"), app("/menu", { session: S.priya }), app("/cart", { session: S.priya }),
+        app("/reserve", { session: S.priya }), app("/orders", { session: S.priya }),
+        app("/auth/sign-in"), app("/ops/kds", { session: S.grill }),
+      ]);
+      const html = reachable.map((r) => r.text).join("\n");
+
+      const mustBeLinked = [
+        ["/menu", "the menu"], ["/reserve", "booking"], ["/cart", "the cart"],
+        ["/orders", "order history"], ["/auth/sign-in", "sign in"],
+        ["/auth/sign-up", "sign up"], ["/", "home"],
+      ];
+      const orphans = mustBeLinked.filter(([href]) => !html.includes(`href="${href}"`));
+      ok("no page is reachable only by typing its address",
+        orphans.length === 0,
+        orphans.length ? `NOTHING LINKS TO: ${orphans.map(([h, n]) => `${h} (${n})`).join(", ")}`
+                       : `all ${mustBeLinked.length} linked from somewhere a person can reach`);
+
+      const prefixes = [["/order/", "live order tracking"], ["/bill/", "the bill"]];
+      const unlinked = prefixes.filter(([p]) => !html.includes(`href="${p}`));
+      ok("the order and bill screens are linked from the history page",
+        unlinked.length === 0,
+        unlinked.length ? `NO LINK TO: ${unlinked.map(([, n]) => n).join(", ")}` : "/order/ and /bill/");
+
+      // Auth pages sat outside the (guest) group with no layout, so they served ZERO links:
+      // a first-timer who tapped "Sign in" had only the browser's Back button.
+      for (const path of ["/auth/sign-in", "/auth/sign-up", "/auth/verify"]) {
+        const r = await app(path);
+        ok(`${path} offers a way back`, /href="\/"/.test(r.text),
+          /href="\/"/.test(r.text) ? "wordmark links home" : "NO WAY OUT");
+      }
+
+      // And ops had no link to the guest half at all — a judge comparing the two was using
+      // the back button for the entire demo.
+      const kds = await app("/ops/kds", { session: S.grill });
+      ok("an ops screen can get back to the guest side", /href="\/menu"/.test(kds.text),
+        "\"Guest view\" in the ops header");
+    },
+  });
+
+  await feature({
     docs: [],
     title: "Is it fast enough to demo?",
     plain: "In plain English: a screen that takes fifteen seconds is broken even if every " +

@@ -22,8 +22,10 @@ export function AuthShell({
 }) {
   return (
     <section style={{ padding: "var(--space-6) var(--space-4) var(--space-8)", maxWidth: "26rem" }}>
-      <p className="eyebrow">Brigade</p>
-      <h1 style={{ fontSize: "var(--text-step-2)", margin: "var(--space-3) 0" }}>{title}</h1>
+      {/* The wordmark moved to app/auth/layout.tsx, where it is a LINK home. It was an
+          inert <p> here, which is why these pages had no exit at all. Saying "Brigade"
+          twice on one screen would be the only thing worse than saying it unclickably. */}
+      <h1 style={{ fontSize: "var(--text-step-2)", marginBottom: "var(--space-3)" }}>{title}</h1>
       {intro && (
         <p style={{ color: "var(--color-fg-muted)", marginBottom: "var(--space-5)" }}>{intro}</p>
       )}

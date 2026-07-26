@@ -99,10 +99,23 @@ export function RunwayMeter({
    */
   if (band === "plenty" && !detail) return null;
 
+  /*
+   * `detail` is the register switch, not just a verbosity switch.
+   *
+   * It is already true on ops surfaces and false on guest ones, so it is the seam that
+   * decides vocabulary too. Both branches below were speaking to the wrong audience: a
+   * diner reading the menu was shown "86" — which the guest shell's own comment says
+   * diners do not understand — and "no limit set", which describes whether a recipe has
+   * been entered. That is a fact about our configuration, not about their dinner.
+   */
+
   // An unlimited dish has no bill of materials entered yet. It is NOT scarce and
   // must never render as a countdown — a half-configured menu should not read as
   // a closed kitchen.
   if (unlimited) {
+    // A diner has no use for this at all: the dish is available, which the absence of a
+    // badge already says. Saying anything here would invent a concern.
+    if (!detail) return null;
     return (
       <p className={`eyebrow ${className}`} style={{ color: "var(--color-fg-subtle)" }}>
         no limit set
@@ -111,13 +124,21 @@ export function RunwayMeter({
   }
 
   if (band === "out") {
+    // The aria-label matters most in exactly this branch, and it was missing: this
+    // return happens BEFORE the label is built further down, so a screen reader on the
+    // guest menu heard the number "86" and nothing else.
+    const outLabel = detail ? "86 — none left" : "Sold out";
     return (
       <p
         className={`mono ${className}`}
         style={{ color, display: "flex", alignItems: "center", gap: "var(--space-2)" }}
+        role="status"
+        aria-label={outLabel}
       >
         <span aria-hidden="true">{glyph}</span>
-        <strong style={{ letterSpacing: "0.08em" }}>86</strong>
+        <strong aria-hidden="true" style={{ letterSpacing: detail ? "0.08em" : undefined }}>
+          {detail ? "86" : "Sold out"}
+        </strong>
       </p>
     );
   }

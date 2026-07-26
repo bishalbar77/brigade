@@ -61,7 +61,7 @@ watching it refuse.
 | Tables | `/ops/floor` | ✅ `/ops/floor` (read-only) |
 | Inventory | `/ops/inventory` | ✅ `/ops/inventory` (read-only) |
 | Staff | `/ops/staff` — **cut-line item 1** | ❌ cut (cut-line 1) |
-| Customers | guest history in analytics | ⚠️ order history only |
+| Customers | `/orders` — a diner's own order history | ✅ `/orders`, linked from the guest header |
 | Sales | `/ops/analytics` | ✅ |
 | Analytics | `/ops/analytics` | ✅ Kasavana–Smith matrix |
 
@@ -226,6 +226,38 @@ Two findings were accepted rather than fixed, and are named here instead:
 - **Revenue is now net of tax and tips** (`subtotal_cents`). `total_cents` was gross of 8%
   tax, and its two writers disagree about tips — `pay_order()` includes them, the seed does
   not — so the tile changed definition the moment anyone paid during a demo.
+
+### A fourth pass: could a person find their way around?
+
+An exploration of every route against every `href` found that **`/order/[id]` was a true
+orphan** — nothing in the app linked to it. It was reached exactly once, by the redirect
+that fires when an order is placed, and `CartView` calls `clearCart()` on the same line, so
+the id survived nowhere but the address bar. Close the tab and a diner could no longer
+reach their own order or their own bill, while the kitchen still had both on screen.
+
+| Was claimed | What was actually true | Fix |
+|---|---|---|
+| Order tracking and billing are guest features | Reachable once, then never again. No history, nothing persisted, no link anywhere | `/orders` + a header link |
+| — | **The auth pages had no layout at all.** `/auth/sign-in` and `/auth/verify` served ZERO links: no wordmark, no nav, no way back but the browser | `app/auth/layout.tsx` |
+| — | **`/auth/sign-up` was unreachable without JavaScript.** Its only link sits in the sign-in footer, inside a Suspense boundary, so the prerendered HTML omitted it | footer added to the fallback |
+| The cart recovers from an unverified email | It linked `/auth/verify` with no `?email=`, so the screen could not resend a code and claimed one had been sent. Verifying then ignored `returnTo` and dropped the diner on `/menu`, away from their full cart | both threaded |
+| A failed magic link explains itself | `/auth/callback` redirects with `?error=…` and sign-in never read it, so the message was discarded and the person saw a blank form | surfaced |
+| — | **Ops had zero links to the guest half.** Anyone following the one "Staff → the pass" link was inside ops for good — including a judge comparing the menu against the board | "Guest view" in the ops header |
+| Guest surfaces use plain language | The menu showed diners "86" and "no limit set". That branch also returned before the `aria-label` was built, so a screen reader heard the number "86" and nothing else | `detail` now switches register; "Sold out" |
+| — | Two silent dead ends: an all-voided bill rendered a disabled button, an empty list and no link; a tracking rail with no items rendered an empty `<ul>` under "In the kitchen" | both explain and link out |
+
+And the one that was a data mistake rather than a code one: **the runway board had nothing
+to count down.** The seed pinned only the dearest dishes, which are the ones that barely
+sell — 4 portions of prawns at 0.15/hr lasts 27 hours, so every dish honestly reported
+"enough for tonight". Runway is portions ÷ rate, and the scarce dishes were the slow ones.
+The constraint now sits on the busiest dish (butter chicken, 1.74/hr) giving a predicted 86
+mid-service.
+
+That in turn exposed a real grouping bug: bands are thresholds on *minutes* (critical <45,
+low <120) and service is longer than that, so a dish with 207 minutes left is banded
+`plenty` while running out four hours before closing. The board grouped by band and filed it
+under "enough for tonight". It now groups by `lastsThroughService`, which is the field the
+engine computes for exactly that question.
 
 ### Open, and deliberately so
 

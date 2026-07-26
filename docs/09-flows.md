@@ -12,6 +12,7 @@ Nothing here is aspirational. Where a flow is partly built, it says so in the fl
 | Who | Flow | Level |
 |---|---|---|
 | [Priya, diner](#priya-the-diner) | Discover → order → track → pay | US1–US3 |
+| [Priya, diner](#flow-p3-find-it-again-tomorrow) | Find a past order and its bill | US3–US4 |
 | [Priya, diner](#flow-p2-book-a-table-or-join-the-queue) | Book a table / join the queue | US3 |
 | [Anyone](#flow-a1-get-an-account) | Sign up, verify, sign in, sign out | US2 |
 | [Rahul, grill](#rahul-the-grill-station) | Work the station | US4 |
@@ -169,6 +170,41 @@ language throughout.
 > got "fully booked" every single time. It looked finished because the seeded book was
 > full of reservations, written by the seed with the service key: data the product itself
 > could not have produced. See patch 005.
+
+### Flow P3: find it again tomorrow
+
+**Happy path**
+
+1. `/orders`, from "Orders" in the header — shown only when signed in, because there is
+   nothing behind it otherwise.
+2. Every order she has placed, newest first: when, what (two dishes named, then a count),
+   the total, and what it is waiting on.
+3. Each row links **one** place, chosen from the order's state — still cooking → the live
+   rail; everything served → the bill, because that is the next thing she must do; already
+   paid → the same URL, which renders as a receipt. A row with two buttons makes the reader
+   do work the screen already had enough information to do.
+
+**Refusals**
+
+| She tries | What happens |
+|---|---|
+| Read another diner's history | Nothing comes back — `orders_read_own` is `guest_id = auth.uid()` |
+| Open `/orders` signed out | An invitation to sign in, carrying `returnTo=/orders` — not an error |
+
+> **How it is tested**
+>
+> - **Automated:** `verify:features` block *Finding an order again afterwards*, which checks
+>   the newest real order appears, that rows link into `/order/` or `/bill/`, that the header
+>   links to the page at all, and that Dan cannot read Priya's history.
+> - **By hand:** order something, close the tab, reopen the site, and find the bill.
+>
+> **Why this exists.** `/order/[id]` was a **true orphan** — nothing in the app linked to
+> it. It was reached once, by the redirect after placing an order, and `clearCart()` runs on
+> the same line, so the id survived nowhere but the address bar. Closing the tab put a
+> diner's own order and bill permanently out of reach while the kitchen kept both on screen.
+> This is the second time this build shipped a screen nothing linked to; `/cart` was the
+> first. `verify:features` now greps the rendered HTML of every reachable page and fails if
+> anything is linked from nowhere.
 
 ### Flow A1: get an account
 

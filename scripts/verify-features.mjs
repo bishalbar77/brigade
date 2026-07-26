@@ -47,6 +47,9 @@ if (!PASSWORD) {
 
 const NOTE = "put back by npm run verify:features";
 
+/** Index matches Postgres dish_velocity.weekday: 0 = Sunday. */
+const DAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
 // ── plumbing ─────────────────────────────────────────────────────────────────
 
 /** PostgREST as the service key (test setup and independent verification only). */
@@ -824,8 +827,40 @@ async function main() {
        * clock time is required only when a dish is actually both open and finite.
        */
       const { body: avail } = await db(
-        "dish_availability?select=portions,unlimited&unlimited=is.false&portions=gt.0&portions=lte.12");
-      const couldCountDown = (avail?.length ?? 0) > 0;
+        "dish_availability?select=dish_id,portions,unlimited&unlimited=is.false&portions=gt.0");
+      const { body: rates } = await db(
+        `dish_velocity?select=dish_id,ewma_units_per_hour,sample_count` +
+        `&weekday=eq.${DAYS.indexOf(dayKey)}&daypart=eq.${nowMin < 16 * 60 ? "lunch" : "dinner"}`);
+      const rateBy = new Map((rates ?? []).map((r) => [r.dish_id, r]));
+
+      /*
+       * Can ANYTHING run out before closing, right now?
+       *
+       * Asking "is service open and is something scarce" was not enough. It failed at
+       * 22:48 with service closing at 23:00: twelve minutes left, so nothing could 86
+       * before the kitchen shut, and the engine correctly predicted nothing. The check was
+       * demanding an outcome the clock had made unreachable — the same mistake as
+       * asserting a band from a portion count, one level up.
+       *
+       * So this computes the actual question the board answers: is any dish's
+       * portions ÷ rate shorter than the service left? Same arithmetic the engine does,
+       * done independently here so the test is not just echoing the thing under test.
+       */
+      const closesAt = closes ? toMin(closes) : null;
+      const minutesLeft = closesAt !== null ? closesAt - nowMin : 0;
+      const soonest = Math.min(
+        ...(avail ?? [])
+          .map((a) => {
+            const r = rateBy.get(a.dish_id);
+            const perHour = Number(r?.ewma_units_per_hour ?? 0);
+            if (!r || r.sample_count < 3 || perHour <= 0) return Infinity;
+            return (a.portions / perHour) * 60;
+          })
+          .filter((m) => Number.isFinite(m)),
+      );
+      const couldCountDown = Number.isFinite(soonest) && soonest < minutesLeft;
+      console.log(`      · ${minutesLeft} min of service left; soonest dish needs ` +
+        `${Number.isFinite(soonest) ? Math.round(soonest) : "n/a"} min`);
 
       if (serviceOpen && couldCountDown) {
         ok("it predicts clock times, not just counts", times.length > 0,
@@ -833,7 +868,7 @@ async function main() {
       } else if (serviceOpen) {
         ok("nothing is close enough to predict, and it says so rather than inventing one",
           times.length === 0,
-          "no dish is both in stock and scarce right now — this test's own ordering used them up");
+          `nothing can 86 in the ${minutesLeft} min left, so a clock time would be invented`);
       } else {
         // The positive form of the same rule: with the kitchen shut there must be NO
         // clock time on the board. This is the check that would have caught the board

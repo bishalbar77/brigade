@@ -237,13 +237,44 @@ async function main() {
     check(predictable.every((x) => x.r.runwayMinutes !== null),
       "every stocked dish with history gets a prediction while service is open",
       `${predictable.length} dishes`);
-    // And the differentiator itself: something must actually be forecast to run out
-    // tonight, or the runway board has nothing to say.
+    /*
+     * The differentiator itself — but only where it is POSSIBLE.
+     *
+     * This asserted flatly that something must be forecast to run out tonight, and failed
+     * at 22:46 with service closing at 23:00. With twelve minutes left nothing can 86
+     * before closing, so the engine was right and the assertion was demanding an outcome
+     * the clock had made unreachable.
+     *
+     * Fourth time this session I have written a check that only passes at certain hours.
+     * The pattern is always the same: asserting a RESULT that depends on when you run it,
+     * instead of the RULE that holds whenever you run it. So both are here now — the rule
+     * unconditionally, and the result only when the remaining service window is long
+     * enough for any dish to run out inside it.
+     */
+    const serviceEnd = Math.max(...windows.map((w) => w.endMinutes));
+    const minutesLeft = serviceEnd - here.minutes;
+    const soonest = Math.min(
+      ...results
+        .filter((x) => x.r.runwayMinutes !== null)
+        .map((x) => x.r.runwayMinutes as number),
+    );
+
+    // The rule: lastsThroughService must agree with the arithmetic, every time. This is
+    // the invariant the runway board was violating when it grouped by band.
+    const consistent = results.filter((x) => x.r.runwayMinutes !== null).every(
+      (x) => x.r.lastsThroughService === (here.minutes + (x.r.runwayMinutes as number) > serviceEnd),
+    );
+    check(consistent, "'lasts through service' always agrees with now + runway vs closing",
+      `${minutesLeft} min of service left, soonest runway ${Number.isFinite(soonest) ? Math.round(soonest) : "n/a"} min`);
+
     const tonight = results.filter((x) => x.r.predicted86At !== null && !x.r.lastsThroughService);
-    check(tonight.length > 0, "at least one dish is forecast to run out DURING service",
-      tonight.length
-        ? tonight.map((x) => `${x.name} ${x.r.predicted86Label}`).slice(0, 3).join(", ")
-        : "nothing 86s before closing — the board will have no countdown to show");
+    if (Number.isFinite(soonest) && soonest < minutesLeft) {
+      check(tonight.length > 0, "the dishes that will run out tonight are forecast",
+        tonight.map((x) => `${x.name} ${x.r.predicted86Label}`).slice(0, 3).join(", "));
+    } else {
+      console.log(`  ─ no countdown expected: ${minutesLeft} min of service left and the ` +
+        `soonest dish needs ${Number.isFinite(soonest) ? Math.round(soonest) : "?"} min`);
+    }
   } else {
     check(predictable.every((x) => x.r.runwayMinutes === null),
       "no dish is given a prediction while the kitchen is shut",

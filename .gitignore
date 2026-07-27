@@ -24,3 +24,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 coverage/
+
+# Submission artifacts: the deck is committed, scratch exports are not
+BLANK-TEMPLATE-DO-NOT-SUBMIT.pdf.bak

@@ -59,8 +59,18 @@ export default function SignUpPage() {
       return;
     }
 
-    // A confirmed session straight away means email confirmation is switched off
-    // in the project. Don't send them to a verify screen with nothing to verify.
+    /*
+     * A session straight away is the EXPECTED path now.
+     *
+     * Patch 008 removed the email-confirmation requirement from place_order(), and the
+     * matching project setting is Authentication -> Providers -> Email -> "Confirm email"
+     * OFF. With it off, signUp() returns a session and the account works immediately.
+     *
+     * The verify branch is kept as a fallback rather than deleted: if that setting is ever
+     * switched back on, signUp() returns a user with NO session, and silently landing them
+     * on /menu would leave them unable to order with no explanation. So the code still
+     * handles it — it is just no longer the normal route.
+     */
     if (data.session) {
       router.replace("/menu");
       router.refresh();

@@ -247,7 +247,7 @@ know which it is.
 | Level | Story | What we build |
 |---|---|---|
 | **Bronze** | US1 · modern, intuitive UI | Two deliberate densities on one token system: guest (phone, at-table, dim room) and ops (wall screen read at 2m, hot kitchen, no mouse). Accessibility floor: 375px, visible focus, reduced-motion, status never encoded in colour alone |
-| **Silver** | US2 · authentication | Email+password with OTP verification, Google OAuth, 7 roles enforced in Postgres RLS. Staff are invite-only — a signup that could choose its own role is privilege escalation |
+| **Silver** | US2 · authentication | Email+password (confirmation deliberately NOT required — patch 008), Google OAuth, 7 roles enforced in Postgres RLS. Staff are invite-only — a signup that could choose its own role is privilege escalation |
 | **Silver** | US3 · digital workflows | Live menu, atomic order placement, per-item order tracking, reservations + walk-in queue with data-driven quotes, billing, notifications |
 | **Gold** | US4 · management dashboard | KDS docket wall, floor/table map, inventory + BOM editor, sales analytics |
 | **Platinum** | US5 · intelligent operations | Runway forecasting, reorder prediction, demand steering, recommendations, menu-engineering insights, threshold notifications |

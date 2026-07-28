@@ -46,32 +46,14 @@ export function CartView({
   tableLabel,
   portionsByDish,
   signedIn,
-  emailVerified,
-  userEmail,
 }: {
   restaurantId: string;
   tableId: string | null;
   tableLabel: string | null;
   portionsByDish: Record<string, number>;
   signedIn: boolean;
-  emailVerified: boolean;
-  userEmail: string | null;
 }) {
   const router = useRouter();
-  /*
-   * Both "verify" links used to be a bare href="/auth/verify".
-   *
-   * That broke the one flow it existed for. With no ?email= the verify screen has nothing
-   * to resend to, so its "Send a new code" button is disabled — and its intro reads "Enter
-   * the code from the email we sent you" when no code has been sent. A new diner with an
-   * unverified address hit a screen that asked for a code it could not provide.
-   *
-   * returnTo brings them back here afterwards, to the cart they already filled: it is
-   * still in localStorage, but before this they were dropped on /menu by ROLE_HOME and had
-   * to find their way back.
-   */
-  const verifyHref =
-    `/auth/verify?returnTo=/cart${userEmail ? `&email=${encodeURIComponent(userEmail)}` : ""}`;
 
   const [cart, setCart] = useState<Cart>(EMPTY_CART);
   const [hydrated, setHydrated] = useState(false);
@@ -229,13 +211,6 @@ export function CartView({
           }}
         >
           <p>{failure.message}</p>
-          {failure.code === "EMAIL_NOT_VERIFIED" && (
-            <p style={{ marginTop: "var(--space-2)" }}>
-              <Link href={verifyHref as never} style={{ color: "var(--color-accent)" }}>
-                Verify now →
-              </Link>
-            </p>
-          )}
           {failure.code === "NOT_AUTHENTICATED" && (
             <p style={{ marginTop: "var(--space-2)" }}>
               <Link
@@ -353,24 +328,6 @@ export function CartView({
           }}
         >
           Sign in to order
-        </Link>
-      ) : !emailVerified ? (
-        <Link
-          href={verifyHref as never}
-          role="button"
-          style={{
-            display: "flex",
-            minHeight: "52px",
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: "var(--radius-md)",
-            background: "var(--color-accent)",
-            color: "var(--color-accent-fg)",
-            fontWeight: 600,
-            textDecoration: "none",
-          }}
-        >
-          Verify your email to order
         </Link>
       ) : (
         <button

@@ -597,6 +597,11 @@ Stated up front rather than discovered under questioning:
 - **Demand steering is a heuristic, not a validated uplift model.** Not A/B tested.
   Claiming a revenue figure would be fabrication; claiming a mechanism is fair.
 - **Payment is simulated.** A sandbox PSP proves nothing a mock doesn't.
+- **Email addresses are not verified.** An account works the moment it is created, by
+  request. So an order can be attached to an address nobody has proved they own, a no-show
+  cannot be reliably chased, and the cheapest bot deterrent on the signup path is gone.
+  A real restaurant taking real money should turn confirmation back on; see
+  `supabase/patches/008_no_email_verification.sql`.
 - **Sub-recipes (nested BOMs) are out of scope.** Toast supports them; three days
   didn't.
 - **Six weeks of seeded history** demonstrates the algorithms, not real customer

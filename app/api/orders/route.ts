@@ -87,15 +87,6 @@ export async function POST(request: Request) {
       );
     }
 
-    if (raw.includes("EMAIL_NOT_VERIFIED")) {
-      return NextResponse.json(
-        {
-          code: "EMAIL_NOT_VERIFIED",
-          message: "Verify your email address before ordering.",
-        },
-        { status: 403 },
-      );
-    }
 
     if (raw.includes("NOT_AUTHENTICATED")) {
       return NextResponse.json(

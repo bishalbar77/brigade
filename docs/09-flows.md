@@ -166,7 +166,7 @@ flowchart TD
 | Order more than exists | 409, "Only 3 Tandoori prawns left." | Named the dish and the real number, so there is something to do next |
 | Order the last portion at the same instant as another diner | Exactly one succeeds; the other is told it just went | Two guests must not both be sold the last one |
 | Order without an account | 401, "Sign in to place an order." | An order is a commitment; it needs a name on it |
-| Order before verifying her email | 403 | Enforced in `place_order()`, not just in the UI |
+| Order before verifying her email | **Allowed** — patch 008 removed that gate on purpose. Signing in is still required, and that is enforced in `place_order()` |
 | Pay while food is still cooking | 409, "The kitchen is still working on part of this order." | |
 | Tap pay twice | One charge. Exactly one payment row | |
 | Open someone else's order or bill | Nothing comes back | RLS, not a UI condition |

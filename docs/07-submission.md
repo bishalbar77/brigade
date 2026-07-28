@@ -33,7 +33,7 @@
 
 | Requirement | Implementation | Status |
 |---|---|---|
-| Email & password with OTP | Supabase Auth, email OTP verification | ✅ `/auth/verify` — SMTP cap, see defects |
+| Email & password | Supabase Auth. Confirmation is deliberately **not required** to order (patch 008); `/auth/verify` still exists and works if the project setting is turned back on | ✅ |
 | Google OAuth | Supabase Auth provider | ✅ configured for production |
 | Role-based access | 7 roles enforced in **Postgres RLS**, not UI conditionals | ✅ 43 RLS policies, 7 roles |
 

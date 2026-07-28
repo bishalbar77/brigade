@@ -39,12 +39,10 @@ export default async function CartPage() {
       tableId={tableId}
       tableLabel={tableLabel}
       portionsByDish={portionsByDish}
+      // No email-verification gate: patch 008 removed it from place_order(), so the UI
+      // must not reintroduce one. Signing in is still required, and that IS enforced in
+      // the database rather than here.
       signedIn={Boolean(user)}
-      // place_order() enforces this too — the UI just avoids a pointless round trip.
-      emailVerified={Boolean(user?.email_confirmed_at)}
-      // Passed so the "verify" links can carry ?email=. Without it the verify screen
-      // cannot resend a code, and says one was sent when none was.
-      userEmail={user?.email ?? null}
     />
   );
 }

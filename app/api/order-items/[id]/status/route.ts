@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { forbiddenMessageFor } from "@/lib/ops/tickets";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 /**
@@ -9,6 +10,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
  * food served that was never cooked, and that rule belongs in the database rather
  * than in whichever button happened to be rendered.
  */
+
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -36,6 +38,9 @@ export async function PATCH(
     // Typed errors from the function, mapped to codes the UI can act on rather
     // than a generic 500 that tells a cook nothing.
     const msg = error.message ?? "";
+    // PostgREST puts a raised exception's DETAIL here. Same read as app/api/queue/route.ts.
+    const detail = (error as { details?: string }).details ?? "";
+
     if (msg.includes("ILLEGAL_TRANSITION")) {
       return NextResponse.json(
         { code: "ILLEGAL_TRANSITION", message: "That isn't the next step for this item." },
@@ -44,7 +49,7 @@ export async function PATCH(
     }
     if (msg.includes("FORBIDDEN")) {
       return NextResponse.json(
-        { code: "FORBIDDEN", message: "Sending a plate away is expo's call." },
+        { code: "FORBIDDEN", message: forbiddenMessageFor(detail) },
         { status: 403 },
       );
     }

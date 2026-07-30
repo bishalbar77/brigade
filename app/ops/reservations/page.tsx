@@ -1,5 +1,14 @@
 import { LiveFrame } from "@/components/ops/LiveFrame";
-import { Cell, Empty, OpsHeader, Pill, ScopeNote, StaffOnly, Table } from "@/components/ops/ReadOnly";
+import {
+  Cell,
+  Empty,
+  OpsHeader,
+  Pill,
+  ScopeNote,
+  SectionHeading,
+  StaffOnly,
+  Table,
+} from "@/components/ops/ReadOnly";
 import { getBookings } from "@/lib/data/reports";
 import { getCurrentProfile } from "@/lib/supabase/server";
 import { isStaff } from "@/lib/auth/roles";
@@ -37,6 +46,7 @@ export default async function ReservationsPage() {
 
   return (
     <LiveFrame channel="bookings" tables={["queue_entries", "orders", "tables"]}>
+      <div className="ops-measure">
       <OpsHeader
         title="Bookings"
         subtitle="Tonight's book and the walk-in queue together, because both are competing for the same tables."
@@ -60,9 +70,9 @@ export default async function ReservationsPage() {
       </ScopeNote>
 
       <section style={{ marginBottom: "var(--space-6)" }}>
-        <h2 className="eyebrow" style={{ marginBottom: "var(--space-3)" }}>
+        <SectionHeading meta={`${bookings.length} booking${bookings.length === 1 ? "" : "s"}`}>
           Tonight&rsquo;s book
-        </h2>
+        </SectionHeading>
         {bookings.length === 0 ? (
           <Empty>Nothing booked for today.</Empty>
         ) : (
@@ -85,9 +95,9 @@ export default async function ReservationsPage() {
       </section>
 
       <section style={{ marginBottom: "var(--space-6)" }}>
-        <h2 className="eyebrow" style={{ marginBottom: "var(--space-3)" }}>
+        <SectionHeading meta={queue.length > 0 ? `${queue.length} waiting` : undefined}>
           Walk-in queue
-        </h2>
+        </SectionHeading>
         {queue.length === 0 ? (
           <Empty>Nobody waiting.</Empty>
         ) : (
@@ -115,9 +125,11 @@ export default async function ReservationsPage() {
       </section>
 
       <section>
-        <h2 className="eyebrow" style={{ marginBottom: "var(--space-3)" }}>
+        {/* Marked as reference so it stops competing with tonight's live book. These
+            medians are six weeks of history; they do not change during service. */}
+        <SectionHeading meta="reference · not live">
           How the wait is worked out
-        </h2>
+        </SectionHeading>
         <Table head={["Party size", "#Median turn", "#Sample"]}>
           {turnTimes.map((t) => (
             <tr key={t.bucket}>
@@ -144,6 +156,7 @@ export default async function ReservationsPage() {
           than ten historical turns say so rather than presenting a default as a measurement.
         </p>
       </section>
+      </div>
     </LiveFrame>
   );
 }

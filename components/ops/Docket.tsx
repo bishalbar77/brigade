@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Spinner } from "@/components/Busy";
 import { useRouter } from "next/navigation";
 import {
@@ -8,9 +8,11 @@ import {
   STATION_LABEL,
   STATUS_ACTION,
   ageLevel,
+  canAdvance,
   ticketAgeMinutes,
   type Docket as DocketData,
   type ItemStatus,
+  type Viewer,
 } from "@/lib/ops/tickets";
 
 /*
@@ -48,27 +50,71 @@ const STATUS_LABEL: Record<ItemStatus, string> = {
   voided: "voided",
 };
 
-export function Docket({ docket, now }: { docket: DocketData; now: number }) {
+export function Docket({
+  docket,
+  now,
+  viewer,
+}: {
+  docket: DocketData;
+  now: number;
+  /** Whose screen this is. Decides which actions are offered at all. */
+  viewer: Viewer;
+}) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
+  const [refreshing, startTransition] = useTransition();
+  /*
+   * Errors are per ITEM, keyed by id.
+   *
+   * One `error` string for the whole docket put the message wherever the docket ended,
+   * under whichever item happened to be last. Reported from the deployed build: a
+   * ticket showed "Sending a plate away is expo's call." underneath a Paneer butter
+   * masala whose only action was "Cooking" — a sentence about plates, under an item it
+   * had nothing to do with, on a docket where nothing could be sent away. Even with the
+   * right wording, a docket-level error is a message without an address.
+   */
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  /*
+   * Busy is per ITEM, and it covers the FETCH.
+   *
+   * Two bugs in one line before this. `pending` came from useTransition, but the
+   * `await fetch` ran BEFORE startTransition — so for the entire 2-3 second round trip
+   * the button was enabled and showed nothing, which is exactly the double-tap hazard
+   * the comment below says it prevents. And it was per-docket, so firing one item
+   * disabled every other item on the same ticket.
+   */
+  const [sending, setSending] = useState<string | null>(null);
 
   const age = ticketAgeMinutes(docket.openedAt, new Date(now));
   const level = ageLevel(age);
 
+  // A refresh brought new data, so whatever went wrong last time is no longer on screen.
+  // The error used to clear only on the next attempt and otherwise sat there for good.
+  const itemStates = docket.items.map((i) => `${i.id}:${i.status}`).join("|");
+  useEffect(() => {
+    setErrors({});
+  }, [itemStates]);
+
   async function advance(itemId: string, to: ItemStatus) {
-    setError(null);
-    const res = await fetch(`/api/order-items/${itemId}/status`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: to }),
-    });
-    if (!res.ok) {
-      const body = (await res.json().catch(() => ({}))) as { message?: string };
-      setError(body.message ?? "That didn't go through.");
-      return;
+    setErrors((e) => { const { [itemId]: _gone, ...rest } = e; return rest; });
+    setSending(itemId);
+    try {
+      const res = await fetch(`/api/order-items/${itemId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: to }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { message?: string };
+        setErrors((e) => ({ ...e, [itemId]: body.message ?? "That didn't go through." }));
+        return;
+      }
+      startTransition(() => router.refresh());
+    } catch {
+      // A dropped connection mid-service must not leave the button spinning forever.
+      setErrors((e) => ({ ...e, [itemId]: "No connection to the kitchen. Try again." }));
+    } finally {
+      setSending(null);
     }
-    startTransition(() => router.refresh());
   }
 
   return (
@@ -83,7 +129,7 @@ export function Docket({ docket, now }: { docket: DocketData; now: number }) {
         background: "var(--color-bg-raised)",
         display: "flex",
         flexDirection: "column",
-        opacity: pending ? 0.7 : 1,
+        opacity: refreshing ? 0.7 : 1,
         transition: "opacity var(--dur-fast) linear",
       }}
     >
@@ -129,6 +175,8 @@ export function Docket({ docket, now }: { docket: DocketData; now: number }) {
         {docket.items.map((item) => {
           const next = NEXT_STATUS[item.status];
           const action = STATUS_ACTION[item.status];
+          const verdict = canAdvance(viewer, item);
+          const busy = sending === item.id;
           return (
             <li
               key={item.id}
@@ -188,7 +236,7 @@ export function Docket({ docket, now }: { docket: DocketData; now: number }) {
                   {STATION_LABEL[item.station]} · {STATUS_LABEL[item.status]}
                 </span>
 
-                {next && action && (
+                {next && action && verdict.allowed && (
                   /*
                    * The whole card used to drop to opacity 0.7 and that was the only sign
                    * anything had happened — at two metres, through glare, on a screen with
@@ -203,8 +251,8 @@ export function Docket({ docket, now }: { docket: DocketData; now: number }) {
                   <button
                     type="button"
                     onClick={() => void advance(item.id, next)}
-                    disabled={pending}
-                    aria-busy={pending}
+                    disabled={busy}
+                    aria-busy={busy}
                     style={{
                       display: "inline-flex",
                       alignItems: "center",
@@ -220,10 +268,10 @@ export function Docket({ docket, now }: { docket: DocketData; now: number }) {
                       font: "inherit",
                       fontWeight: 600,
                       fontSize: "var(--text-step-0)",
-                      cursor: pending ? "progress" : "pointer",
+                      cursor: busy ? "progress" : "pointer",
                     }}
                   >
-                    {pending ? (
+                    {busy ? (
                       <>
                         <Spinner label={`${action}, sending`} />
                         <span>Sending…</span>
@@ -233,24 +281,47 @@ export function Docket({ docket, now }: { docket: DocketData; now: number }) {
                     )}
                   </button>
                 )}
+
+                {/*
+                  Not your call — so say whose, rather than offer a button that fails.
+                  This is the fix for the stuck pass: a chef's ticket at `plated` showed
+                  an "Away" button, and `advance_item_status` refuses `served` for a chef
+                  every single time. The ticket could not move and nothing said why.
+                  Authorization still lives in the database; this only stops the UI
+                  proposing something it knows will be refused.
+                */}
+                {next && !verdict.allowed && verdict.who && (
+                  <p
+                    className="eyebrow"
+                    style={{
+                      textAlign: "right",
+                      color: "var(--color-fg-subtle)",
+                      maxWidth: "12rem",
+                    }}
+                  >
+                    {verdict.who}
+                  </p>
+                )}
               </div>
+
+              {/* Under the item it concerns, not at the foot of the ticket. */}
+              {errors[item.id] && (
+                <p
+                  role="alert"
+                  style={{
+                    marginTop: "var(--space-2)",
+                    color: "var(--color-runway-critical)",
+                    fontSize: "var(--text-step--1)",
+                  }}
+                >
+                  {errors[item.id]}
+                </p>
+              )}
             </li>
           );
         })}
       </ul>
 
-      {error && (
-        <p
-          role="alert"
-          style={{
-            padding: "var(--space-3) var(--space-4)",
-            color: "var(--color-runway-critical)",
-            fontSize: "var(--text-step--1)",
-          }}
-        >
-          {error}
-        </p>
-      )}
     </article>
   );
 }

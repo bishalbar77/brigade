@@ -5,6 +5,7 @@ import { resolveTimeZone } from "@/lib/runway/clock";
 import { createSupabaseServerClient, getCurrentProfile } from "@/lib/supabase/server";
 import { daypartKey, windowsForDate } from "@/lib/data/menu";
 import {
+  filterDocketsByStation,
   type Docket,
   type RunwayRow,
   type ItemStatus,
@@ -81,8 +82,7 @@ export async function getKdsData(station: Station | null = null): Promise<KdsPay
         }))
         // A finished or voided item leaves the board. Completed dockets must clear,
         // or an 8-hour service grows an unbounded DOM.
-        .filter((it) => it.status !== "served" && it.status !== "voided")
-        .filter((it) => (station ? it.station === station : true));
+        .filter((it) => it.status !== "served" && it.status !== "voided");
 
       return {
         orderId: order.id as string,
@@ -95,9 +95,12 @@ export async function getKdsData(station: Station | null = null): Promise<KdsPay
 
   return {
     restaurantId: restaurant.id as string,
+    // One implementation of the station rule, shared with the client — see
+    // filterDocketsByStation. `station: null` (the KDS's own call) returns everything and
+    // lets the board filter instantly instead of paying a round trip per tab.
+    dockets: filterDocketsByStation(dockets, station),
     station,
     role: profile?.role ?? "guest",
-    dockets,
     serviceOpen: currentDaypart(now, windows, timeZone) !== null,
   };
 }

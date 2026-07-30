@@ -27,7 +27,7 @@ export default async function MenuAdminPage() {
   const tracked = rows.filter((r) => !r.unlimited).length;
 
   return (
-    <div>
+    <div className="ops-measure">
       <OpsHeader
         title="Menu & recipes"
         subtitle="Every dish, what it's made of, and how many portions that allows. Nothing here is stored as an availability figure — it's counted from stock each time it's asked for."

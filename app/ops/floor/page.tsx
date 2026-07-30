@@ -1,4 +1,11 @@
-import { Cell, Empty, OpsHeader, Pill, ScopeNote, StaffOnly, Table } from "@/components/ops/ReadOnly";
+import {
+  Empty,
+  OpsHeader,
+  Pill,
+  ScopeNote,
+  SectionHeading,
+  StaffOnly,
+} from "@/components/ops/ReadOnly";
 import { LiveFrame } from "@/components/ops/LiveFrame";
 import { getFloor } from "@/lib/data/reports";
 import { getCurrentProfile } from "@/lib/supabase/server";
@@ -30,6 +37,13 @@ export default async function FloorPage() {
 
   return (
     <LiveFrame channel="floor" tables={["tables", "orders"]}>
+      {/*
+        The "Open tables in detail" table that used to sit at the bottom of this page is
+        gone. Its six columns — table, zone, seats, sitting, away, state — were every
+        field already printed on the cards above it, sorted differently. A second full
+        screen of the same data reads as more information and is none.
+      */}
+      <div className="ops-measure">
       <OpsHeader
         title="Floor"
         subtitle="Every table, its state, and how long the party has been sitting. Dwell time is what the walk-in wait quote is built from."
@@ -49,16 +63,7 @@ export default async function FloorPage() {
       ) : (
         floor.zones.map((zone) => (
           <section key={zone.zone} style={{ marginBottom: "var(--space-6)" }}>
-            <h2
-              style={{
-                fontSize: "var(--text-step-0)",
-                textTransform: "uppercase",
-                letterSpacing: "0.08em",
-                marginBottom: "var(--space-3)",
-              }}
-            >
-              {zone.zone}
-            </h2>
+            <SectionHeading meta={`${zone.tables.length} tables`}>{zone.zone}</SectionHeading>
 
             <div
               style={{
@@ -125,38 +130,7 @@ export default async function FloorPage() {
           </section>
         ))
       )}
-
-      <section style={{ marginTop: "var(--space-6)" }}>
-        <h2 className="eyebrow" style={{ marginBottom: "var(--space-3)" }}>
-          Open tables in detail
-        </h2>
-        {floor.zones.flatMap((z) => z.tables).filter((t) => t.status === "seated").length === 0 ? (
-          <Empty>Nothing seated right now.</Empty>
-        ) : (
-          <Table head={["Table", "Zone", "#Seats", "#Sitting", "#Away", "State"]}>
-            {floor.zones
-              .flatMap((z) => z.tables)
-              .filter((t) => t.status === "seated")
-              .sort((a, b) => (b.dwellMinutes ?? 0) - (a.dwellMinutes ?? 0))
-              .map((t) => (
-                <tr key={t.id}>
-                  <Cell strong>{t.label}</Cell>
-                  <Cell tone="muted">{t.zone}</Cell>
-                  <Cell numeric>{t.seats}</Cell>
-                  <Cell numeric tone={(t.dwellMinutes ?? 0) > 100 ? "warn" : undefined}>
-                    {t.dwellMinutes}m
-                  </Cell>
-                  <Cell numeric tone="muted">
-                    {t.itemsAway}/{t.itemsTotal}
-                  </Cell>
-                  <Cell>
-                    <Pill tone={STATUS_TONE[t.status]}>{t.status}</Pill>
-                  </Cell>
-                </tr>
-              ))}
-          </Table>
-        )}
-      </section>
+      </div>
     </LiveFrame>
   );
 }

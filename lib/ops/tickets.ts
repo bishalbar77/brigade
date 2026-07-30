@@ -96,6 +96,117 @@ export interface RunwayRow {
   sampleCount: number;
 }
 
+/**
+ * Narrow the board to one station.
+ *
+ * Shared by `getKdsData()` on the server and `KdsBoard` on the client so the two cannot
+ * drift. The client needs it because station switching used to be a `?station=` link:
+ * every tap was a 2.5-second `force-dynamic` round trip that ALSO re-fetched the runway
+ * board, which does not depend on the station at all. Filtering here is instant.
+ *
+ * Keeps the items on that station, then drops any docket left with none — a ticket with
+ * nothing for you on it is not your ticket.
+ */
+export function filterDocketsByStation(
+  dockets: readonly Docket[],
+  station: Station | null,
+): Docket[] {
+  if (!station) return [...dockets];
+  return dockets
+    .map((d) => ({ ...d, items: d.items.filter((it) => it.station === station) }))
+    .filter((d) => d.items.length > 0);
+}
+
+/**
+ * Who is allowed to take this item to its next status.
+ *
+ * A MIRROR of `advance_item_status()` — the source of truth is
+ * `supabase/patches/003_authz_and_integrity.sql:64-85`, and RLS is what actually
+ * enforces it (ADR-3). Nothing here withholds anything; it only stops the UI OFFERING
+ * an action that will be refused.
+ *
+ * That mattered: the docket rendered the next-step button for every item regardless of
+ * who was looking. `plated → served` is expo's, never a chef's, so a chef's ticket sat
+ * on the pass behind a button that 403'd on every tap, with nothing on screen saying
+ * who could clear it. That is what "stuck" meant.
+ *
+ * Returns the roles that CAN act when the viewer cannot, so the UI can name them
+ * instead of showing a dead control.
+ */
+export interface Viewer {
+  role: string | null | undefined;
+  /** Only meaningful for `chef` — a chef de partie works one station. */
+  station: string | null | undefined;
+}
+
+const KITCHEN_ROLES = ["chef", "expo", "manager", "owner"];
+const AWAY_ROLES = ["expo", "server", "manager", "owner"];
+
+export function canAdvance(
+  viewer: Viewer,
+  item: { status: ItemStatus; station: Station },
+): { allowed: true } | { allowed: false; who: string } {
+  const role = viewer.role ?? "";
+  const to = NEXT_STATUS[item.status];
+
+  // Nothing to advance (served, voided) — not a permission answer.
+  if (!to) return { allowed: false, who: "" };
+
+  /*
+   * `who` is deliberately TERSE. It is read at two metres on a wall screen, in the slot
+   * a button used to occupy, on a row that ALREADY prints the station and the status —
+   * "CURRY · ON ORDER". An earlier draft said "Curry handles this", which named the
+   * station a second time in the same row and wrapped onto three lines.
+   */
+  if (to === "served") {
+    if (!AWAY_ROLES.includes(role)) return { allowed: false, who: "expo's call" };
+    return { allowed: true };
+  }
+
+  // fired | cooking | plated
+  if (!KITCHEN_ROLES.includes(role)) {
+    return { allowed: false, who: "kitchen only" };
+  }
+
+  // A chef de partie works THEIR station. Expo and managers work the whole pass.
+  if (role === "chef" && viewer.station !== item.station) {
+    return { allowed: false, who: "not your station" };
+  }
+
+  return { allowed: true };
+}
+
+/**
+ * Why `advance_item_status()` refused, in words a cook can act on.
+ *
+ * Lives here rather than in the route so it can be unit-tested, and because it is pure
+ * string work over the ticket vocabulary.
+ *
+ * The function raises FORBIDDEN for FIVE different reasons and names each in the
+ * exception's DETAIL. The route used to collapse all five into "Sending a plate away is
+ * expo's call." — so a Tandoor chef tapping FIRE on a Curry ticket was told about expo
+ * and plates, a rule they were not breaking. The message named the wrong problem, and
+ * the ticket then looked stuck because nothing said what to do instead.
+ *
+ * Matched on DETAIL, most specific first. Source of truth:
+ * supabase/patches/003_authz_and_integrity.sql:36-85.
+ */
+export function forbiddenMessageFor(detail: string): string {
+  if (detail.includes("not your station")) {
+    // The detail carries the raw enum ("saute"); a cook reads the label ("Curry").
+    const raw = /on (\w+), not your station/.exec(detail)?.[1] as Station | undefined;
+    const label = raw ? (STATION_LABEL[raw] ?? raw) : null;
+    return label
+      ? `That ticket is on ${label} — not your station.`
+      : "That ticket is on another station.";
+  }
+  if (detail.includes("belongs to expo")) return "Sending a plate away is expo's call.";
+  if (detail.includes("belong to the kitchen")) return "Firing and plating are the kitchen's call.";
+  if (detail.includes("another restaurant")) return "That ticket isn't from this kitchen.";
+  if (detail.includes("staff only")) return "Staff only.";
+  return "You can't move that ticket.";
+}
+
 /** Minutes a docket has been open. The critical number on a wall screen. */
 export function ticketAgeMinutes(openedAt: string, now: Date = new Date()): number {
   return Math.max(0, Math.floor((now.getTime() - new Date(openedAt).getTime()) / 60_000));

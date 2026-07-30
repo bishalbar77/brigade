@@ -398,6 +398,23 @@
   white-space: nowrap;
 }
 
+/*
+ * A reading measure for the ops screens that are read, not watched.
+ *
+ * `app/ops/layout.tsx`'s <main> is full-bleed with `--space-4` of padding — which at ops
+ * density is 10px — and no max-width anywhere. On a 1920px monitor that gave Pantry and
+ * Bookings 1900px-wide table rows, and stretched Analytics' 720x420 matrix to a very flat
+ * aspect while its fixed 12px axis labels shrank relative to the plot.
+ *
+ * Applied per page rather than to <main>, because the two wall boards want the opposite:
+ * the KDS docket grid and the runway board should use every pixel there is. A cap on
+ * those would waste the screen they were designed for.
+ */
+.ops-measure {
+  max-width: 90rem;
+  margin-inline: auto;
+}
+
 @media (max-width: 640px) {
   /*
    * `display: block`, not merely `min-width: 0`.

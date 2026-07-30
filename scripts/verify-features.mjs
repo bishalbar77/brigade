@@ -1743,6 +1743,98 @@ async function main() {
   // 24 ────────────────────────────────────────────────────────────────────────
   await feature({
     docs: [],
+    title: "Does the pass ever get stuck?",
+    plain: "In plain English: a Tandoor cook looking at the Curry section used to see " +
+      "buttons that could never work, and pressing one said 'Sending a plate away is " +
+      "expo's call' — a rule they weren't breaking. Nothing moved and nothing explained.",
+    run: async (ok) => {
+      // A Curry ticket. `saute` is the enum; Curry is what the kitchen calls it.
+      const { body: curry } = await db(
+        "order_items?select=id,station,status&station=eq.saute&status=eq.placed&limit=1",
+      );
+      const item = curry?.[0];
+
+      if (!item) {
+        ok("there is a Curry ticket to test with", false, "run npm run seed");
+        return;
+      }
+
+      // Refused, so nothing is mutated and the demo data is untouched.
+      const refused = await app(`/api/order-items/${item.id}/status`, {
+        session: S.grill, method: "PATCH", body: { status: "fired" },
+      });
+      const msg = refused.json?.message ?? "";
+
+      ok("a Tandoor cook still cannot fire a Curry ticket", refused.status === 403,
+        `HTTP ${refused.status}`);
+
+      // THE BUG. All five FORBIDDEN reasons collapsed into one sentence about expo.
+      ok("and is told which station it belongs to", /Curry/.test(msg), `"${msg}"`);
+      ok("…not told about expo, whose rule this isn't", !/expo/i.test(msg));
+
+      // The screen must not offer the action in the first place.
+      const board = await app("/ops/kds?station=saute", { session: S.grill });
+      const html = board.text ?? "";
+      ok("the board names who can act instead of drawing a dead button",
+        /not your station/.test(html),
+        "a chef's ticket at 'on the pass' used to show an Away button that 403'd forever");
+
+      // Station switching is now local, so the tabs are buttons and there is nothing to
+      // wait for. A link here would mean a 2.5s round trip per tap.
+      ok("switching station costs no round trip", /aria-pressed="(true|false)">?/.test(html) &&
+        !/href="\/ops\/kds\?station=/.test(html),
+        "tabs are buttons over data already loaded");
+    },
+  });
+
+  // 25 ────────────────────────────────────────────────────────────────────────
+  await feature({
+    docs: [],
+    title: "Do the ops screens read like a dashboard?",
+    plain: "In plain English: the summary numbers used to be plain text SMALLER than the " +
+      "page heading, three screens quietly refreshed themselves with no sign they were " +
+      "live, and one screen printed the same table twice.",
+    run: async (ok) => {
+      const pages = [
+        ["Service", "/ops/analytics", 5],
+        ["Pantry", "/ops/inventory", 3],
+        ["Bookings", "/ops/reservations", 3],
+        ["Floor", "/ops/floor", 2],
+      ];
+
+      const wrong = [];
+      for (const [name, path, expected] of pages) {
+        const r = await app(path, { session: S.manager });
+        // Each tile is a dt/dd pair inside the header's <dl>.
+        const tiles = (r.text?.match(/<dt class="eyebrow">/g) ?? []).length;
+        if (tiles < expected) wrong.push(`${name} ${tiles}/${expected}`);
+      }
+      ok("every screen with numbers renders them as tiles", wrong.length === 0,
+        wrong.length ? wrong.join(", ") : pages.map(([n, , e]) => `${n} ${e}`).join(" · "));
+
+      // OpsHeader had a `live` prop no page ever passed, while LiveFrame threw away the
+      // connection state its own hook returned.
+      const pantry = await app("/ops/inventory", { session: S.manager });
+      ok("a screen that holds a live subscription says so",
+        /listening|reconnecting/i.test(pantry.text ?? ""),
+        "wired through context, so it cannot be forgotten on the next screen");
+
+      // Sorting is a real navigation on a force-dynamic route; loading.tsx does not
+      // re-show for a search-param change, so the link has to answer for itself.
+      ok("a sortable header shows that a tap landed",
+        /aria-sort=|↕/.test(pantry.text ?? "") && (pantry.text ?? "").includes("Needs ordering only"),
+        "pending indicator inside the link, via useLinkStatus");
+
+      const floor = await app("/ops/floor", { session: S.manager });
+      ok("the floor plan no longer prints the same tables twice",
+        !/Open tables in detail/.test(floor.text ?? ""),
+        "six columns that were all already on the cards above");
+    },
+  });
+
+  // 26 ────────────────────────────────────────────────────────────────────────
+  await feature({
+    docs: [],
     title: "Putting the test's own mess back",
     plain: "In plain English: this test ate real food. It puts the stock back through " +
       "the same recorded path a manager would use, so the demo data is where it started.",
@@ -1776,7 +1868,7 @@ async function main() {
     },
   });
 
-  // 25 ────────────────────────────────────────────────────────────────────────
+  // 27 ────────────────────────────────────────────────────────────────────────
   await feature({
     docs: [],
     title: "Did this test actually cover everything?",

@@ -16,6 +16,7 @@
     "images": "tsx --env-file=.env.local scripts/fetch-dish-images.ts",
     "verify:data": "tsx --env-file=.env.local scripts/verify-data.ts",
     "verify:features": "node --env-file=.env.local scripts/verify-features.mjs",
+    "verify:ui": "node --env-file=.env.local scripts/verify-ui.mjs",
     "sql:check": "bash scripts/sql-check.sh",
     "sql:lint": "node scripts/sql-lint.mjs",
     "check": "bash scripts/check-all.sh"

@@ -1,5 +1,5 @@
 import { MenuMatrix, type MatrixDish } from "@/components/ops/MenuMatrix";
-import { Empty, OpsHeader, ScopeNote, StaffOnly } from "@/components/ops/ReadOnly";
+import { Empty, OpsHeader, ScopeNote, SectionHeading, StaffOnly } from "@/components/ops/ReadOnly";
 import { getAnalytics } from "@/lib/data/reports";
 import { formatCents } from "@/lib/money";
 import { getCurrentProfile } from "@/lib/supabase/server";
@@ -64,7 +64,7 @@ export default async function AnalyticsPage({
     }));
 
   return (
-    <div>
+    <div className="ops-measure">
       <OpsHeader
         title="Service"
         subtitle={`The last ${windowDays} days of trading. Everything here is computed from the order ledger — no figure is typed in.`}
@@ -131,9 +131,14 @@ export default async function AnalyticsPage({
         </Empty>
       ) : !showCost || matrix.length === 0 ? null : (
         <section id="matrix">
-          <h2 style={{ fontSize: "var(--text-step-1)", marginBottom: "var(--space-2)" }}>
+          {/* The chart used to sit behind four lines of explanation, with two more
+              paragraphs below it — stats, prose, prose, chart, prose, prose, table. The
+              subtitle now carries the one-line version and the reading goes straight to
+              the plot; the Kasavana-Smith detail is a tap away, under the thing it
+              describes. */}
+          <SectionHeading meta={`${matrix.length} dishes`}>
             Which dishes earn their place
-          </h2>
+          </SectionHeading>
           <p
             style={{
               color: "var(--color-fg-muted)",
@@ -141,9 +146,7 @@ export default async function AnalyticsPage({
               maxWidth: "72ch",
             }}
           >
-            How often each dish is ordered, against what it actually earns after ingredient cost.
-            The four quadrants are the standard Kasavana&ndash;Smith reading, and each one implies a
-            different action.
+            How often each dish is ordered, against what it earns after ingredient cost.
           </p>
           <MenuMatrix
             dishes={matrix}
@@ -151,6 +154,29 @@ export default async function AnalyticsPage({
             dir={matrixDir}
             hrefFor={matrixHref}
           />
+
+          <details style={{ marginTop: "var(--space-4)" }}>
+            <summary
+              className="eyebrow"
+              style={{ cursor: "pointer", color: "var(--color-fg-muted)" }}
+            >
+              How to read the four quadrants
+            </summary>
+            <p
+              style={{
+                marginTop: "var(--space-3)",
+                color: "var(--color-fg-subtle)",
+                fontSize: "var(--text-step--1)",
+                maxWidth: "72ch",
+              }}
+            >
+              The quadrants are the standard Kasavana&ndash;Smith reading, split on the median of
+              each axis rather than an arbitrary threshold: a Star sells well and earns well, a
+              Plowhorse sells well and earns little, a Puzzle earns well and sells little, and a
+              Dog does neither. Each implies a different action, named against every dish in the
+              table above.
+            </p>
+          </details>
         </section>
       )}
     </div>

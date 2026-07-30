@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { LiveBadge } from "@/components/ops/LiveFrame";
+import { PendingUnderline } from "@/components/ops/Pending";
 
 /*
  * Shared primitives for the read-only ops screens.
@@ -12,16 +14,23 @@ import Link from "next/link";
  * a greyed-out button they can't press just looks broken.
  */
 
+export interface OpsStat {
+  label: string;
+  value: string;
+  tone?: "normal" | "warn" | "critical";
+}
+
 export function OpsHeader({
   title,
   subtitle,
   stats,
-  live,
+  /** Rendered on the same line as the stats — a control that acts on one of them. */
+  action,
 }: {
   title: string;
   subtitle?: string;
-  stats?: { label: string; value: string; tone?: "normal" | "warn" | "critical" }[];
-  live?: boolean;
+  stats?: OpsStat[];
+  action?: React.ReactNode;
 }) {
   return (
     <header style={{ marginBottom: "var(--space-5)" }}>
@@ -34,11 +43,9 @@ export function OpsHeader({
         }}
       >
         <h1 style={{ fontSize: "var(--text-step-2)" }}>{title}</h1>
-        {live !== undefined && (
-          <p className="eyebrow" style={{ marginLeft: "auto" }}>
-            {live ? "listening" : "reconnecting"}
-          </p>
-        )}
+        {/* Automatic inside a LiveFrame, absent outside one. Replaces a `live` prop that
+            no page ever passed, on three screens that were subscribed the whole time. */}
+        <LiveBadge style={{ marginLeft: "auto" }} />
       </div>
 
       {subtitle && (
@@ -47,43 +54,175 @@ export function OpsHeader({
         </p>
       )}
 
-      {stats && stats.length > 0 && (
-        <dl
-          style={{
-            display: "flex",
-            gap: "var(--space-5)",
-            flexWrap: "wrap",
-            marginTop: "var(--space-4)",
-          }}
-        >
-          {stats.map((s) => (
-            <div key={s.label}>
-              <dt className="eyebrow">{s.label}</dt>
-              {/* Display face with PROPORTIONAL figures, not mono/tabular. Equal-width
-                  digits make a standalone number look loose at display sizes; tabular
-                  belongs in table rows and axis ticks where digits align vertically. */}
-              <dd
-                style={{
-                  margin: 0,
-                  fontFamily: "var(--font-display)",
-                  fontVariantNumeric: "proportional-nums",
-                  fontSize: "var(--text-step-1)",
-                  fontWeight: 600,
-                  color:
-                    s.tone === "critical"
-                      ? "var(--color-runway-critical)"
-                      : s.tone === "warn"
-                        ? "var(--color-runway-low)"
-                        : "var(--color-fg)",
-                }}
-              >
-                {s.value}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      )}
+      {stats && stats.length > 0 && <StatTiles stats={stats} action={action} />}
     </header>
+  );
+}
+
+/**
+ * The summary numbers, as actual tiles.
+ *
+ * They were a borderless wrapping flex row of unstyled `<div>`s, with the value at
+ * `--text-step-1` — at ops density that is 30px against a 24px body and a 38px `h1`, so
+ * **the numbers were smaller than the page title**. On a screen whose entire job is to
+ * report figures, the figures were the third-largest thing on it. That is the single
+ * reason none of these pages read as a dashboard.
+ *
+ * `auto-fit` with a floor, not a flex row: two stats then fill the width instead of
+ * huddling at the left, and five wrap into a second row of equal columns rather than
+ * an uneven ragged line.
+ */
+export function StatTiles({
+  stats,
+  action,
+}: {
+  stats: OpsStat[];
+  action?: React.ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "flex-end",
+        gap: "var(--space-4)",
+        flexWrap: "wrap",
+        marginTop: "var(--space-4)",
+      }}
+    >
+      <dl
+        style={{
+          flex: "1 1 22rem",
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(9rem, 1fr))",
+          gap: "var(--space-2)",
+          margin: 0,
+        }}
+      >
+        {stats.map((s) => (
+          <div
+            key={s.label}
+            style={{
+              border: "1px solid var(--color-border)",
+              borderRadius: "var(--radius-md)",
+              background: "var(--color-bg-raised)",
+              padding: "var(--space-3) var(--space-4)",
+            }}
+          >
+            <dt className="eyebrow">{s.label}</dt>
+            {/*
+              TABULAR figures, and the comment this replaces said the opposite.
+              It argued proportional digits look better at display sizes, and reserved
+              tabular for table rows. But these values are re-rendered by a realtime
+              refresh mid-service — covers seated, waiting, longest wait all tick — and
+              CLAUDE.md is explicit: "monospace digits wherever numbers change, so
+              countdowns don't jitter." A number that shifts width as it updates, on a
+              screen being read at two metres, is the thing that rule exists to stop.
+              Same family, tabular figures: no jitter, no second typeface.
+            */}
+            <dd
+              style={{
+                margin: 0,
+                marginTop: "var(--space-1)",
+                fontFamily: "var(--font-display)",
+                fontVariantNumeric: "tabular-nums",
+                fontFeatureSettings: '"tnum" 1',
+                fontSize: "var(--text-step-2)",
+                fontWeight: 700,
+                lineHeight: 1.1,
+                letterSpacing: "-0.02em",
+                color:
+                  s.tone === "critical"
+                    ? "var(--color-runway-critical)"
+                    : s.tone === "warn"
+                      ? "var(--color-runway-low)"
+                      : "var(--color-fg)",
+              }}
+            >
+              {s.value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      {action}
+    </div>
+  );
+}
+
+/**
+ * A section heading that outranks the content under it.
+ *
+ * Bookings and Floor used `className="eyebrow"` for their `h2`s — 18px mono in
+ * `--color-fg-subtle`, which made the quietest text on the page the thing announcing its
+ * loudest content. Floor's zone headings were `--text-step-0`, i.e. exactly body size.
+ * Neither grouped anything.
+ */
+export function SectionHeading({
+  children,
+  meta,
+  id,
+}: {
+  children: React.ReactNode;
+  /** A count or a qualifier — "reference", "4 tables". Stays quiet. */
+  meta?: React.ReactNode;
+  id?: string;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "baseline",
+        justifyContent: "space-between",
+        gap: "var(--space-3)",
+        flexWrap: "wrap",
+        marginBottom: "var(--space-3)",
+        paddingBottom: "var(--space-2)",
+        borderBottom: "1px solid var(--color-border)",
+      }}
+    >
+      <h2 id={id} style={{ fontSize: "var(--text-step-1)" }}>
+        {children}
+      </h2>
+      {meta && (
+        <p className="eyebrow" style={{ color: "var(--color-fg-subtle)" }}>
+          {meta}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The surface every ops panel was hand-rolling.
+ *
+ * `border` + `--radius-md` + `--color-bg-raised` + padding appeared independently in
+ * eight places (Docket, RunwayBoard, OpsNav, the menu and floor cards, three separate
+ * dashed empty states). Same intent, eight chances to drift.
+ */
+export function Panel({
+  children,
+  tone = "solid",
+  style,
+}: {
+  children: React.ReactNode;
+  /** `dashed` is the empty-state variant: no fill, so it reads as an absence. */
+  tone?: "solid" | "dashed";
+  style?: React.CSSProperties;
+}) {
+  return (
+    <div
+      style={{
+        border:
+          tone === "dashed"
+            ? "1px dashed var(--color-border-strong)"
+            : "1px solid var(--color-border)",
+        borderRadius: "var(--radius-md)",
+        background: tone === "dashed" ? "transparent" : "var(--color-bg-raised)",
+        padding: "var(--space-4)",
+        ...style,
+      }}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -201,14 +340,25 @@ export function Table({
                   {sort && key ? (
                     <Link
                       href={sort.hrefFor(key) as never}
-                      style={{ color: "inherit", textDecoration: "none" }}
+                      style={{
+                        // `relative` so PendingUnderline can pin to this header without
+                        // taking part in layout.
+                        position: "relative",
+                        display: "inline-block",
+                        paddingBottom: "2px",
+                        color: "inherit",
+                        textDecoration: "none",
+                      }}
                     >
                       {text}
                       {/* An arrow AND aria-sort AND the brighter label: three channels,
                           because a wall screen is read through glare. */}
                       <span aria-hidden="true">
-                        {active ? (sort.dir === "asc" ? " ↑" : " ↓") : " ↕"}
+                        {active ? (sort.dir === "asc" ? " \u2191" : " \u2193") : " \u2195"}
                       </span>
+                      {/* Sorting is a real round trip and loading.tsx does not re-show
+                          for a search-param change. See Pending.tsx. */}
+                      <PendingUnderline />
                     </Link>
                   ) : (
                     text
@@ -316,15 +466,8 @@ export function StaffOnly({ what }: { what: string }) {
 /** Designed empty state. An empty screen is an invitation, not a dead end. */
 export function Empty({ children }: { children: React.ReactNode }) {
   return (
-    <p
-      style={{
-        border: "1px dashed var(--color-border-strong)",
-        borderRadius: "var(--radius-md)",
-        padding: "var(--space-5)",
-        color: "var(--color-fg-muted)",
-      }}
-    >
+    <Panel tone="dashed" style={{ padding: "var(--space-5)", color: "var(--color-fg-muted)" }}>
       {children}
-    </p>
+    </Panel>
   );
 }

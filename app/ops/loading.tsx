@@ -21,12 +21,38 @@ export default function OpsLoading() {
         <div className="skeleton" style={{ height: "1rem", width: "min(38rem, 90%)" }} />
       </div>
 
-      {/* The stat row every ops header carries. */}
-      <div style={{ display: "flex", gap: "var(--space-5)", flexWrap: "wrap", marginBottom: "var(--space-6)" }}>
-        {[0, 1, 2, 3].map((i) => (
-          <div key={i} style={{ display: "grid", gap: "var(--space-2)" }}>
+      {/*
+        The stat tiles.
+        Shaped like StatTiles now, and THREE rather than four: the pages that carry stats
+        have two (floor, menu), three (pantry, bookings) or five (service), so three is
+        the only count that never promises a tile the arriving page won't draw. Four was
+        an over-promise on five of the seven routes this one file stands in for.
+
+        `auto-fit` matches the real grid, so the tiles land at the same widths and nothing
+        jumps when the content replaces them.
+      */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(9rem, 1fr))",
+          gap: "var(--space-2)",
+          maxWidth: "90rem",
+          marginBottom: "var(--space-6)",
+        }}
+      >
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            style={{
+              border: "1px solid var(--color-border)",
+              borderRadius: "var(--radius-md)",
+              padding: "var(--space-3) var(--space-4)",
+              display: "grid",
+              gap: "var(--space-2)",
+            }}
+          >
             <div className="skeleton" style={{ height: "0.7rem", width: "5rem", opacity: 0.6 }} />
-            <div className="skeleton" style={{ height: "1.6rem", width: "4.5rem" }} />
+            <div className="skeleton" style={{ height: "2rem", width: "4.5rem" }} />
           </div>
         ))}
       </div>

@@ -89,7 +89,17 @@ export function RunwayBoard({
             {live ? "listening" : "reconnecting"}
           </p>
         </div>
-        <p style={{ color: "var(--color-fg-muted)", marginTop: "var(--space-2)" }}>
+        {/* maxWidth to match OpsHeader. Without it this line ran the full width of a
+            1920px wall screen, which is roughly 150 characters — about twice a readable
+            measure, and the one page where a manager is reading a sentence rather than
+            scanning a number. */}
+        <p
+          style={{
+            color: "var(--color-fg-muted)",
+            marginTop: "var(--space-2)",
+            maxWidth: "62ch",
+          }}
+        >
           {serviceOpen
             ? "Time left at tonight’s actual sell rate. The named ingredient is what runs out first."
             : "Portions only — with no service running there’s no sell rate to predict from."}

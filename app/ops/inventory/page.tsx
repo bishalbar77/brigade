@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { LiveFrame } from "@/components/ops/LiveFrame";
+import { PendingDot } from "@/components/ops/Pending";
 import { Cell, Empty, OpsHeader, Pill, ScopeNote, StaffOnly, Table } from "@/components/ops/ReadOnly";
 import { getPantry } from "@/lib/data/reports";
 import { formatCents } from "@/lib/money";
@@ -94,11 +95,41 @@ export default async function InventoryPage({
     return qs ? `/ops/inventory?${qs}` : "/ops/inventory";
   };
 
+  /*
+   * The control that acts on "need ordering", sitting WITH it.
+   *
+   * The header counted the number and the pill that filters by it was four blocks and
+   * two prose paragraphs further down the page. A link rather than a button: the state
+   * survives a reload and can be left pinned open on a wall screen during a delivery.
+   */
+  const needsOrderFilter = (
+    <Link
+      href={filterHref() as never}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        flexShrink: 0,
+        minHeight: "44px",
+        padding: "0 var(--space-4)",
+        borderRadius: "999px",
+        border: `1px solid ${onlyShort ? "var(--color-accent)" : "var(--color-border-strong)"}`,
+        background: onlyShort ? "var(--color-accent)" : "transparent",
+        color: onlyShort ? "var(--color-accent-fg)" : "var(--color-fg-muted)",
+        textDecoration: "none",
+        fontSize: "var(--text-step--1)",
+      }}
+    >
+      {onlyShort ? `\u2713 Needs ordering only` : `Needs ordering only`}
+      <PendingDot />
+    </Link>
+  );
+
   return (
     <LiveFrame channel="pantry" tables={["ingredients"]}>
+      <div className="ops-measure">
       <OpsHeader
         title="Pantry"
-        subtitle="Stock against par, with reorder quantities worked out from how fast each ingredient is actually being used — then capped by shelf life, so nothing is ordered that would spoil first."
+        subtitle="Stock against par, with reorder quantities worked out from real consumption."
         stats={[
           {
             label: "need ordering",
@@ -108,6 +139,7 @@ export default async function InventoryPage({
           { label: "short shelf life", value: String(expiring) },
           { label: "tracked", value: String(pantry.rows.length) },
         ]}
+        action={needsOrderFilter}
       />
 
       <ScopeNote action={{ href: "/ops/runway", label: "Runway board" }}>
@@ -120,31 +152,6 @@ export default async function InventoryPage({
           Unit costs are hidden for your role. Ask a manager or owner if you need them.
         </ScopeNote>
       )}
-
-      {/* The header already counted how many need ordering and offered no way to act on
-          it. A link rather than a control: it survives a reload and can be pinned open
-          on a wall screen during a delivery. */}
-      <p style={{ marginBottom: "var(--space-4)" }}>
-        <Link
-          href={filterHref() as never}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            minHeight: "44px",
-            padding: "0 var(--space-4)",
-            borderRadius: "999px",
-            border: `1px solid ${onlyShort ? "var(--color-accent)" : "var(--color-border-strong)"}`,
-            background: onlyShort ? "var(--color-accent)" : "transparent",
-            color: onlyShort ? "var(--color-accent-fg)" : "var(--color-fg-muted)",
-            textDecoration: "none",
-            fontSize: "var(--text-step--1)",
-          }}
-        >
-          {onlyShort
-            ? `✓ Needs ordering only (${rows.length})`
-            : `Needs ordering only (${pantry.needsOrder})`}
-        </Link>
-      </p>
 
       {pantry.rows.length === 0 ? (
         <Empty>No ingredients tracked yet.</Empty>
@@ -193,10 +200,27 @@ export default async function InventoryPage({
                 )}
                 <Cell>
                   {short ? (
-                    <Pill tone="warn">
-                      order {r.suggestion.suggestedQty} {r.unit}
-                      {r.suggestion.cappedByShelfLife ? " · shelf-life capped" : ""}
-                    </Pill>
+                    /*
+                     * The quantity and the caveat, STACKED.
+                     *
+                     * On one line this pill read "order 9.04 kg · shelf-life capped" —
+                     * about 30 characters, which made ACTION the widest column in a
+                     * nine-column table. The table then exceeded even a 1920px screen and
+                     * `.scroll-x` clipped the pill's own right edge, so the part that got
+                     * cut was the reason the quantity had been capped. Splitting it lets
+                     * the column shrink to the quantity and gives the ingredient names
+                     * back the width they were losing.
+                     */
+                    <span style={{ display: "grid", gap: "var(--space-1)", justifyItems: "start" }}>
+                      <Pill tone="warn">
+                        order {r.suggestion.suggestedQty} {r.unit}
+                      </Pill>
+                      {r.suggestion.cappedByShelfLife && (
+                        <span className="eyebrow" style={{ color: "var(--color-fg-subtle)" }}>
+                          shelf-life capped
+                        </span>
+                      )}
+                    </span>
                   ) : (
                     <Pill tone="ok">ok</Pill>
                   )}
@@ -207,18 +231,30 @@ export default async function InventoryPage({
         </Table>
       )}
 
-      <p
-        style={{
-          marginTop: "var(--space-4)",
-          color: "var(--color-fg-subtle)",
-          fontSize: "var(--text-step--1)",
-          maxWidth: "70ch",
-        }}
-      >
-        Reorder point = daily usage × supplier lead time × 1.2 safety factor. &ldquo;Used/day&rdquo;
-        is summed across every dish containing the ingredient, from each dish&rsquo;s current sell
-        rate — so it moves with the menu rather than being typed in.
-      </p>
+      {/* Folded away, not deleted. How the reorder point is derived matters the first
+          time a manager questions a number and never again — it belongs one tap down,
+          under the table it explains, rather than as standing furniture. */}
+      <details style={{ marginTop: "var(--space-4)" }}>
+        <summary
+          className="eyebrow"
+          style={{ cursor: "pointer", color: "var(--color-fg-muted)" }}
+        >
+          How the reorder point is worked out
+        </summary>
+        <p
+          style={{
+            marginTop: "var(--space-3)",
+            color: "var(--color-fg-subtle)",
+            fontSize: "var(--text-step--1)",
+            maxWidth: "70ch",
+          }}
+        >
+          Reorder point = daily usage × supplier lead time × 1.2 safety factor.
+          &ldquo;Used/day&rdquo; is summed across every dish containing the ingredient, from each
+          dish&rsquo;s current sell rate — so it moves with the menu rather than being typed in.
+        </p>
+      </details>
+      </div>
     </LiveFrame>
   );
 }

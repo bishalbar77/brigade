@@ -9,7 +9,9 @@ import {
   ErrorNote,
   Field,
   GoogleButton,
+  PasswordField,
   SubmitButton,
+  looksLikeEmail,
 } from "@/components/auth/AuthShell";
 import { createClient } from "@/lib/supabase/client";
 
@@ -28,13 +30,27 @@ export default function SignUpPage() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{
+    full_name?: string;
+    email?: string;
+    password?: string;
+  }>({});
 
   async function signUp(e: React.FormEvent) {
     e.preventDefault();
-    if (password.length < 8) {
-      setError("Use at least 8 characters.");
-      return;
-    }
+
+    // Per FIELD, not one banner at the top. "Use at least 8 characters" above three
+    // inputs does not say which one it means, and it replaced whatever else was wrong.
+    const next: { full_name?: string; email?: string; password?: string } = {};
+    if (!fullName.trim()) next.full_name = "What should we call you?";
+    if (!email.trim()) next.email = "Enter your email address.";
+    else if (!looksLikeEmail(email)) next.email = "That doesn’t look like an email address.";
+    if (!password) next.password = "Choose a password.";
+    else if (password.length < 8) next.password = "Use at least 8 characters.";
+
+    setFieldErrors(next);
+    if (next.full_name || next.email || next.password) return;
+
     setBusy(true);
     setError(null);
 
@@ -112,8 +128,12 @@ export default function SignUpPage() {
           name="full_name"
           autoComplete="name"
           required
+          error={fieldErrors.full_name}
           value={fullName}
-          onChange={(e) => setFullName(e.target.value)}
+          onChange={(e) => {
+            setFullName(e.target.value);
+            setFieldErrors((f) => ({ ...f, full_name: undefined }));
+          }}
         />
         <Field
           label="Email"
@@ -121,18 +141,25 @@ export default function SignUpPage() {
           type="email"
           autoComplete="email"
           required
+          error={fieldErrors.email}
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(e) => {
+            setEmail(e.target.value);
+            setFieldErrors((f) => ({ ...f, email: undefined }));
+          }}
         />
-        <Field
+        <PasswordField
           label="Password"
           name="password"
-          type="password"
           autoComplete="new-password"
           required
           hint="At least 8 characters."
+          error={fieldErrors.password}
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={(e) => {
+            setPassword(e.target.value);
+            setFieldErrors((f) => ({ ...f, password: undefined }));
+          }}
         />
         <SubmitButton busy={busy}>Create account</SubmitButton>
       </form>

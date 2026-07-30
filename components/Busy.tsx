@@ -22,7 +22,9 @@ export function Spinner({ label }: { label?: string }) {
       <span className="spinner" aria-hidden="true" />
       {/* Announced once, politely — never interrupting whatever is being read. */}
       {label ? (
-        <span role="status" aria-live="polite" style={{ position: "absolute", left: "-9999px" }}>
+        // .sr-only rather than `left: -9999px`: an off-screen element that ever takes
+        // focus drags the viewport sideways with it.
+        <span role="status" aria-live="polite" className="sr-only">
           {label}
         </span>
       ) : null}

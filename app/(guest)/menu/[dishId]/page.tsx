@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AddToOrder } from "@/components/guest/AddToOrder";
+import { DishImage } from "@/components/guest/DishImage";
 import { RunwayMeter } from "@/components/runway/RunwayMeter";
+import { creditFor } from "@/lib/data/image-credits";
 import { getDishDetail } from "@/lib/data/menu";
 import { formatCents } from "@/lib/money";
 
@@ -22,6 +24,7 @@ export default async function DishPage({ params }: { params: Promise<{ dishId: s
 
   const { dish, ingredientNames } = detail;
   const out = dish.runway.band === "out";
+  const credit = creditFor(dish.name);
 
   return (
     <article style={{ padding: "var(--space-5) var(--space-4) var(--space-8)" }}>
@@ -30,6 +33,23 @@ export default async function DishPage({ params }: { params: Promise<{ dishId: s
           ← Menu
         </Link>
       </p>
+
+      {/* `priority` because on this screen the photo IS the hero — it is the largest
+          contentful paint, and lazy-loading your own LCP is a self-inflicted delay. */}
+      <div
+        style={{
+          borderRadius: "var(--radius-lg)",
+          overflow: "hidden",
+          marginBottom: "var(--space-4)",
+        }}
+      >
+        <DishImage
+          name={dish.name}
+          imageUrl={dish.imageUrl}
+          size="hero"
+          priority
+        />
+      </div>
 
       <h1 style={{ fontSize: "var(--text-step-3)" }}>{dish.name}</h1>
 
@@ -110,6 +130,37 @@ export default async function DishPage({ params }: { params: Promise<{ dishId: s
             {ingredientNames.join(", ")}
           </p>
         </section>
+      )}
+
+      {/* CC BY and CC BY-SA both require attribution to travel with the image, which
+          means where a reader can actually see it — not only in a repo file. */}
+      {/* Deliberately not .eyebrow: it uppercases, and "PRIYAM1307" is not how the
+          photographer writes their name. Attribution should reproduce it, not restyle it. */}
+      {credit && (
+        <p
+          style={{
+            marginTop: "var(--space-6)",
+            color: "var(--color-fg-subtle)",
+            fontSize: "var(--text-step--1)",
+          }}
+        >
+          Photo:{" "}
+          <a href={credit.source} rel="noreferrer" style={{ color: "inherit" }}>
+            {credit.author}
+          </a>
+          {" · "}
+          {credit.licenceUrl ? (
+            <a href={credit.licenceUrl} rel="noreferrer" style={{ color: "inherit" }}>
+              {credit.licence}
+            </a>
+          ) : (
+            credit.licence
+          )}
+          {" · via "}
+          <Link href="/credits" style={{ color: "inherit" }}>
+            Wikimedia Commons
+          </Link>
+        </p>
       )}
     </article>
   );

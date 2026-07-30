@@ -47,6 +47,18 @@ if (!PASSWORD) {
 
 const NOTE = "put back by npm run verify:features";
 
+/**
+ * Every order this script places carries this prefix in its idempotency key.
+ *
+ * ONE prefix, because setUp deletes them all by it. Orders were the one thing the
+ * end-of-run cleanup never released: it put the stock back and reset the table's
+ * status, but left the ORDER open — and `orders_one_open_per_table` then refused the
+ * next run's order at the same table with a bare HTTP 500. So the suite passed once
+ * per seed and failed on the second run for a reason that had nothing to do with the
+ * app.
+ */
+const KEY_PREFIX = "verify-features-";
+
 /** Index matches Postgres dish_velocity.weekday: 0 = Sunday. */
 const DAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 
@@ -242,6 +254,37 @@ async function setUp() {
       method: "DELETE",
     });
   }
+
+  /*
+   * Orders from earlier runs of THIS script, matched on the key prefix it mints.
+   *
+   * Deliberately not "every open order by priya" — the seed creates live orders on
+   * purpose so the KDS has something to show, and deleting those would quietly empty
+   * the demo. The prefix is the only thing that distinguishes a test's order from a
+   * seeded one. order_items and payments both cascade, so one DELETE is enough.
+   *
+   * Also reopens the tables those orders were holding: place_order()'s trigger promotes
+   * a table to `seated`, and a stale `seated` row makes the floor plan read as a full
+   * restaurant on a second run.
+   */
+  // The legacy prefixes are listed alongside the current one so a database dirtied by
+  // an older build of this script heals itself. A suite that needs a manual SQL fix
+  // before it will pass gets reported as a broken app.
+  const mine = ["features-", "race-", "notes-", KEY_PREFIX]
+    .map((p) => `idempotency_key.like.${p}*`)
+    .join(",");
+
+  const { body: stale } = await db(`orders?select=id,table_id&or=(${mine})`);
+  if ((stale ?? []).length > 0) {
+    await db(`orders?or=(${mine})`, { method: "DELETE" });
+    const heldTables = [...new Set((stale ?? []).map((o) => o.table_id).filter(Boolean))];
+    if (heldTables.length > 0) {
+      await db(`tables?id=in.(${heldTables.join(",")})`, {
+        method: "PATCH", body: JSON.stringify({ status: "open" }),
+      });
+    }
+    console.log(`  cleared ${stale.length} order(s) left by an earlier run`);
+  }
 }
 
 /**
@@ -391,7 +434,7 @@ async function main() {
           restaurantId: S.restaurant.id,
           tableId: S.table?.id ?? null,
           items: [{ dishId: S.grillDish.id, qty: 1 }, { dishId: S.sauteDish.id, qty: 1 }],
-          idempotencyKey: `features-${Date.now()}`,
+          idempotencyKey: `${KEY_PREFIX}order-${Date.now()}`,
         },
       });
       S.orderId = placed.json?.orderId;
@@ -422,7 +465,7 @@ async function main() {
         const body = (k) => ({
           restaurantId: S.restaurant.id,
           items: [{ dishId: S.sauteDish.id, qty: all }],
-          idempotencyKey: `race-${k}-${Date.now()}`,
+          idempotencyKey: `${KEY_PREFIX}race-${k}-${Date.now()}`,
         });
         const [a, b] = await Promise.all([
           app("/api/orders", { session: S.priya, method: "POST", body: body("a") }),
@@ -1035,8 +1078,28 @@ async function main() {
       ok("action buttons declare a busy state rather than just going grey",
         missing.length === 0, missing.length ? `no aria-busy on ${missing.join(", ")}` : busyWired.join(", "));
 
-      const dish = S.menu[0] ? await app(`/menu/${S.menu[0].id}`, { session: S.priya }) : { text: "" };
-      ok("and a dish page offers a way to add to it", /Add to order/i.test(dish.text));
+      /*
+       * A dish that can actually be ordered RIGHT NOW, re-read at this moment.
+       *
+       * This used to open `S.menu[0]`, captured before anything had been ordered. By
+       * the time it ran, the race check above had deliberately bought every remaining
+       * portion of the first sauté dish — which is usually the same row — so the page
+       * correctly showed "Finished for tonight" and the check failed for being right.
+       * A test must not assert on state it has just spent.
+       */
+      const { body: liveMenu } = await as(null,
+        `menu_public?select=id,name,portions,unlimited,manually_86&restaurant_id=eq.${S.restaurant.id}`);
+      const orderable = (liveMenu ?? []).find(
+        (d) => !d.manually_86 && (d.unlimited || d.portions > 0));
+
+      if (!orderable) {
+        ok("and a dish page offers a way to add to it", false,
+          "nothing on the menu is available, so there is nothing to add");
+      } else {
+        const dish = await app(`/menu/${orderable.id}`, { session: S.priya });
+        ok("and a dish page offers a way to add to it", /Add to order/i.test(dish.text ?? ""),
+          `${orderable.name}, ${orderable.unlimited ? "unlimited" : `${orderable.portions} left`}`);
+      }
 
       ok("a signed-in diner sees their own name in the header",
         menu.text.includes("Priya"), "first name only at 375px");
@@ -1369,7 +1432,315 @@ async function main() {
     },
   });
 
-  // 14 ────────────────────────────────────────────────────────────────────────
+  // 16 ────────────────────────────────────────────────────────────────────────
+  await feature({
+    docs: [],
+    title: "Does the menu look like food?",
+    plain: "In plain English: does every dish show a photograph — and if one has no " +
+      "photo, does its card still hold the same shape instead of leaving a ragged hole?",
+    run: async (ok) => {
+      const page = await app("/menu");
+      const html = page.text ?? "";
+
+      // Cards and media blocks are counted from the RENDERED page, so this measures
+      // what a diner receives rather than what the source intends.
+      const cards = (html.match(/data-dish-card="/g) ?? []).length;
+      const photos = (html.match(/data-dish-media="photo"/g) ?? []).length;
+      const fallbacks = (html.match(/data-dish-media="fallback"/g) ?? []).length;
+
+      ok("the menu page renders dish cards", cards > 0, `${cards} cards`);
+
+      // THE failure that matters: a card with neither a photo nor a stand-in is a card
+      // of a different height, and one of those makes the whole grid look broken.
+      ok("every card shows either a photograph or its stand-in — none shows neither",
+        cards > 0 && photos + fallbacks === cards,
+        `${photos} photos + ${fallbacks} stand-ins = ${photos + fallbacks} of ${cards} cards`);
+
+      const { body: dishes } = await as(null, "menu_public?select=name,image_url&limit=200");
+      const withUrl = (dishes ?? []).filter((d) => d.image_url);
+      ok("the dishes have photographs recorded against them",
+        withUrl.length > 0, `${withUrl.length} of ${dishes?.length ?? 0} dishes`);
+
+      // A URL in the database that 404s is worse than a null one: null draws the
+      // stand-in, a broken URL draws a broken image.
+      const broken = [];
+      for (const d of withUrl.slice(0, 8)) {
+        const res = await fetch(d.image_url, { method: "HEAD" }).catch(() => null);
+        const type = res?.headers.get("content-type") ?? "";
+        if (!res?.ok || !type.startsWith("image/")) broken.push(`${d.name} → ${res?.status ?? "no response"}`);
+      }
+      ok("the photographs actually load", broken.length === 0,
+        broken.length ? broken.join(", ") : `${Math.min(8, withUrl.length)} sampled, all image/*`);
+
+      // CC BY and CC BY-SA require attribution a reader can reach.
+      const credits = await app("/credits");
+      const named = withUrl.filter((d) => (credits.text ?? "").includes(d.name)).length;
+      ok("every photograph is credited on a page a guest can open",
+        credits.status === 200 && named === withUrl.length,
+        `/credits → HTTP ${credits.status} · ${named} of ${withUrl.length} dishes credited`);
+    },
+  });
+
+  // 17 ────────────────────────────────────────────────────────────────────────
+  await feature({
+    docs: [],
+    title: "Does the cart quote the tax the kitchen will actually charge?",
+    plain: "In plain English: the cart used to promise one tax and the bill charged " +
+      "another. On a ₹480 order it quoted ₹38.40 and billed ₹24. Does the number on " +
+      "the cart now come from the restaurant's own rate?",
+    run: async (ok) => {
+      const { body: rest } = await db(`restaurants?select=tax_rate&id=eq.${S.restaurant.id}`);
+      const rate = Number(rest?.[0]?.tax_rate);
+      ok("the restaurant has a tax rate on record", Number.isFinite(rate), `${rate}`);
+
+      // The cart is client-rendered from localStorage, so the server HTML holds no
+      // totals. What it DOES hold is the props handed to the client component, in the
+      // flight payload — which is precisely the wiring that was broken.
+      const page = await app("/cart", { session: S.priya });
+      const found = /taxRate\\?":\s*([0-9.]+)/.exec(page.text ?? "");
+      const quoted = found ? Number(found[1]) : NaN;
+
+      ok("the cart is handed the restaurant's real rate, not a hardcoded one",
+        Number.isFinite(quoted) && Math.abs(quoted - rate) < 1e-9,
+        found ? `cart got ${quoted}, database says ${rate}` : "no taxRate reached the cart");
+
+      // Guards the specific regression rather than any wrong value: 0.08 was the literal.
+      ok("the old hardcoded 8% is gone",
+        !(Number.isFinite(quoted) && quoted === 0.08 && rate !== 0.08),
+        rate === 0.08 ? "the restaurant genuinely charges 8%, so this cannot be distinguished" : "");
+
+      const bill = /taxRate\\?":\s*([0-9.]+)/.exec(
+        (await app(`/bill/${S.orderId}`, { session: S.priya })).text ?? "",
+      );
+      ok("the bill and the cart agree on the rate",
+        bill && Math.abs(Number(bill[1]) - quoted) < 1e-9,
+        bill ? `bill ${bill[1]} · cart ${quoted}` : "no rate on the bill");
+    },
+  });
+
+  // 18 ────────────────────────────────────────────────────────────────────────
+  await feature({
+    docs: [],
+    title: "Can a stranger tell which half of this is theirs?",
+    plain: "In plain English: Brigade is a menu for a diner and a kitchen system for " +
+      "the staff. Does the front page ask which one you are, instead of hiding the " +
+      "staff half in a footnote?",
+    run: async (ok) => {
+      const home = await app("/");
+      const html = home.text ?? "";
+
+      ok("the front page loads", home.status === 200, `HTTP ${home.status}`);
+      ok("it offers the diner's route", html.includes("eating here") && html.includes('href="/menu"'));
+
+      // returnTo matters: signing in and landing on the menu sends a cook to the wrong
+      // half of the product, having just told the app which half they wanted.
+      ok("it offers the staff route, and remembers where they were going",
+        /returnTo=\/ops\/kds/.test(html),
+        "an unauthenticated visitor is sent to sign in and returned to the pass");
+
+      ok("the old footnote link is gone", !html.includes("Staff → the pass"));
+    },
+  });
+
+  // 19 ────────────────────────────────────────────────────────────────────────
+  await feature({
+    docs: [],
+    title: "Can a diner find one dish among 28?",
+    plain: "In plain English: 28 dishes in one long scroll, with no search, no way to " +
+      "jump to a course and no vegetarian filter — even though the kitchen already " +
+      "records which dishes are vegetarian. Is any of that reachable now?",
+    run: async (ok) => {
+      const page = await app("/menu");
+      const html = page.text ?? "";
+
+      ok("there is a search field", html.includes('id="dish-search"'));
+
+      // The jump links must point at sections that EXIST, or the strip scrolls nowhere.
+      const targets = [...html.matchAll(/href="#cat-([0-9a-f-]+)"/g)].map((m) => m[1]);
+      const anchors = new Set([...html.matchAll(/id="cat-([0-9a-f-]+)"/g)].map((m) => m[1]));
+      const dangling = targets.filter((t) => !anchors.has(t));
+      ok("the course strip jumps to courses that are on the page",
+        targets.length > 0 && dangling.length === 0,
+        `${targets.length} links, ${anchors.size} sections${dangling.length ? `, ${dangling.length} dangling` : ""}`);
+
+      ok("there is a vegetarian filter", /aria-pressed="false">Vegetarian|>Vegetarian</.test(html));
+
+      // The tags were fetched, typed and passed down for weeks without ever being shown.
+      const { body: veg } = await as(null, "menu_public?select=name&tags=cs.{vegetarian}&limit=5");
+      ok("dishes that are vegetarian say so on the card",
+        (veg ?? []).length > 0 && html.includes("vegetarian"),
+        `${veg?.length ?? 0} vegetarian dishes in the database`);
+
+      ok("a dish can be added without opening it first",
+        /aria-label="Add [^"]+ to your order"/.test(html),
+        "one tap from the list instead of two through the detail page");
+    },
+  });
+
+  // 20 ────────────────────────────────────────────────────────────────────────
+  await feature({
+    docs: [],
+    title: "Does a note reach the person cooking?",
+    plain: "In plain English: a diner types 'no chilli'. Does that sentence survive all " +
+      "the way to the ticket the cook reads?",
+    run: async (ok) => {
+      if (!S.grillDish) { ok("there is a dish to order", false); return; }
+
+      const note = `no chilli · verify ${Date.now().toString(36)}`;
+      const placed = await app("/api/orders", {
+        session: S.priya, method: "POST",
+        body: {
+          restaurantId: S.restaurant.id,
+          tableId: S.table?.id ?? null,
+          items: [{ dishId: S.grillDish.id, qty: 1, notes: note }],
+          idempotencyKey: `${KEY_PREFIX}notes-${Date.now()}`,
+        },
+      });
+      S.noteOrderId = placed.json?.orderId;
+      ok("an order carrying a note is accepted", placed.status === 201 && Boolean(S.noteOrderId),
+        `HTTP ${placed.status}`);
+
+      if (!S.noteOrderId) return;
+
+      const { body: items } = await db(
+        `order_items?select=notes,station&order_id=eq.${S.noteOrderId}`,
+      );
+      ok("the note is stored against the item, not dropped on the way",
+        (items ?? []).some((i) => i.notes === note), `"${items?.[0]?.notes ?? ""}"`);
+
+      // The kitchen screen is where it has to be legible, so check the rendered page.
+      const kds = await app("/ops/kds", { session: S.grill });
+      ok("the cook's screen shows it on the docket",
+        (kds.text ?? "").includes(note), `/ops/kds → HTTP ${kds.status}`);
+
+      // And the input a diner would type it into must exist — the field was plumbed
+      // end to end for weeks with nothing anywhere to fill it in.
+      //
+      // Checked in the JAVASCRIPT the browser downloads for /cart, not in the page's
+      // HTML: the cart is rendered from localStorage, so a request with no cart shows
+      // the empty state and the line controls never appear in server-rendered markup.
+      // The bundle is still the real artefact a diner receives — this is not reading
+      // the source.
+      const cart = await app("/cart", { session: S.priya });
+      const scripts = [...(cart.text ?? "").matchAll(/src="([^"]+\.js)"/g)].map((m) => m[1]);
+      let found = false;
+      for (const src of scripts) {
+        const url = src.startsWith("http") ? src : `${TARGET}${src}`;
+        const js = await fetch(url).then((r) => (r.ok ? r.text() : "")).catch(() => "");
+        if (js.includes("Note for the kitchen")) { found = true; break; }
+      }
+      ok("the cart ships an input to type one into", found,
+        `${scripts.length} script(s) checked`);
+    },
+  });
+
+  // 21 ────────────────────────────────────────────────────────────────────────
+  await feature({
+    docs: [],
+    title: "Does the booking screen tell the truth?",
+    plain: "In plain English: it showed 'Fri' with no date, ran lunch and dinner " +
+      "together as one nine-hour list, booked a party of nine as six, and told every " +
+      "returning guest they were first in the queue. Is any of that still true?",
+    run: async (ok) => {
+      const page = await app("/reserve", { session: S.priya });
+      const html = page.text ?? "";
+
+      ok("the booking page loads", page.status === 200, `HTTP ${page.status}`);
+
+      // A real date beside the weekday. Four days ahead can repeat a weekday name.
+      ok("day buttons carry a real date, not just a weekday",
+        /\d{1,2}\s(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/.test(html),
+        "so 'Sat' says which Saturday");
+
+      // Lunch and dinner are two sittings with a shut kitchen between them.
+      const services = ["Lunch", "Dinner"].filter((s) => html.includes(`>${s}</p>`));
+      ok("lunch and dinner are separated", services.length > 0, services.join(" + ") || "neither found");
+
+      ok("a party of nine is no longer quietly booked as six", !html.includes(">6+<"));
+      ok("party sizes go past six", html.includes("More than eight"));
+
+      // The old code hardcoded position 1 for every returning guest.
+      ok("nobody is told they are first in the queue without that being known",
+        !/Position\s*1</.test(html),
+        "a position is shown only when join_queue() has just returned one");
+    },
+  });
+
+  // 22 ────────────────────────────────────────────────────────────────────────
+  await feature({
+    docs: [],
+    title: "Can staff use the pantry on a phone?",
+    plain: "In plain English: nine columns of stock on a phone used to scroll sideways " +
+      "with nothing pinned, so you read a number and lost the ingredient it belonged " +
+      "to. And the header counted what needed ordering with no way to see just those.",
+    run: async (ok) => {
+      const plain = await app("/ops/inventory", { session: S.manager });
+      ok("the pantry loads for a manager", plain.status === 200, `HTTP ${plain.status}`);
+
+      // The card layout is driven by --col-N, set from the same head array the real
+      // header row uses — one source for the column names, so they cannot drift.
+      ok("each row can restack as labelled fields on a narrow screen",
+        /--col-1:/.test(plain.text ?? ""), "column labels are handed to CSS");
+
+      const sorted = await app("/ops/inventory?sort=stock&dir=asc", { session: S.manager });
+      ok("a column can be sorted, and says so to a screen reader",
+        /aria-sort="ascending"/.test(sorted.text ?? ""),
+        "aria-sort appeared nowhere in this codebase before");
+
+      const filtered = await app("/ops/inventory?only=short", { session: S.manager });
+      const rows = (t) => (t.match(/<tr>/g) ?? []).length;
+      ok("the pantry can show only what needs ordering",
+        filtered.status === 200 && rows(filtered.text ?? "") <= rows(plain.text ?? ""),
+        `${rows(filtered.text ?? "")} of ${rows(plain.text ?? "")} rows`);
+
+      const matrix = await app("/ops/analytics?sort=margin&dir=desc", { session: S.manager });
+      ok("the menu matrix sorts by margin too",
+        matrix.status === 200 && /aria-sort="descending"/.test(matrix.text ?? ""),
+        `/ops/analytics → HTTP ${matrix.status}`);
+    },
+  });
+
+  // 23 ────────────────────────────────────────────────────────────────────────
+  await feature({
+    docs: [],
+    title: "Can this be used without a mouse?",
+    plain: "In plain English: on a keyboard, every page used to start by walking the " +
+      "whole header. And a sold-out dish still took a tab stop and still opened when " +
+      "you pressed Enter, despite looking unavailable.",
+    run: async (ok) => {
+      const shells = [
+        ["the diner's pages", "/", undefined],
+        ["the kitchen's pages", "/ops/kds", "grill"],
+        ["the sign-in pages", "/auth/sign-in", undefined],
+      ];
+      const without = [];
+      for (const [name, path, who] of shells) {
+        const r = await app(path, { session: who ? S[who] : undefined });
+        if (!/class="skip-link"/.test(r.text ?? "")) without.push(`${name} (${path})`);
+      }
+      ok("every shell starts with a skip-to-content link", without.length === 0,
+        without.length ? `missing on ${without.join(", ")}` : "all three shells");
+
+      // .sr-only replaced an inline `left: -9999px`, which drags the viewport sideways
+      // the moment the element it hides takes focus.
+      const home = await app("/");
+      ok("hidden announcements no longer scroll the page sideways",
+        !/left:\s*-9999px/.test(home.text ?? ""), "the clip-rect technique instead");
+
+      const menu = await app("/menu");
+      const html = menu.text ?? "";
+      const soldOut = (html.match(/>Sold out</g) ?? []).length;
+      if (soldOut === 0) {
+        ok("a sold-out dish is not focusable", true, "nothing is sold out right now");
+      } else {
+        // pointer-events stops a mouse and does nothing at all to a keyboard.
+        ok("a sold-out dish is not focusable", !/pointerEvents|pointer-events:\s*none/.test(html),
+          `${soldOut} sold out, none of them a link`);
+      }
+    },
+  });
+
+  // 24 ────────────────────────────────────────────────────────────────────────
   await feature({
     docs: [],
     title: "Putting the test's own mess back",
@@ -1377,7 +1748,7 @@ async function main() {
       "the same recorded path a manager would use, so the demo data is where it started.",
     run: async (ok) => {
       let restored = 0;
-      for (const id of [S.orderId, S.raceOrderId].filter(Boolean)) restored += await putStockBack(id);
+      for (const id of [S.orderId, S.raceOrderId, S.noteOrderId].filter(Boolean)) restored += await putStockBack(id);
       ok("every portion this test consumed is booked back in, with a note", restored > 0,
         `${restored} stock entries reversed, each noted "${NOTE}"`);
 
@@ -1405,7 +1776,7 @@ async function main() {
     },
   });
 
-  // 15 ────────────────────────────────────────────────────────────────────────
+  // 25 ────────────────────────────────────────────────────────────────────────
   await feature({
     docs: [],
     title: "Did this test actually cover everything?",

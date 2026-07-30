@@ -51,6 +51,13 @@ export interface MenuCategory {
 export interface MenuPayload {
   restaurantId: string;
   restaurantName: string;
+  /**
+   * The restaurant's real tax rate, carried on the menu payload so the cart quotes what
+   * `place_order()` will actually charge. It used to be hardcoded at 0.08 in the cart
+   * while the database charged the seeded 0.05 — a ₹480 order was quoted ₹38.40 tax and
+   * billed ₹24. A rate that lives in one place cannot drift from itself.
+   */
+  taxRate: number;
   /** Ordered by urgency: soonest to run out first. */
   dishes: MenuDish[];
   categories: MenuCategory[];
@@ -108,7 +115,7 @@ export async function getMenuWithRunway(now: Date = new Date()): Promise<MenuPay
   // the only place that would take a slug instead.
   const { data: restaurant, error: rErr } = await supabase
     .from("restaurants")
-    .select("id, name, timezone, service_hours")
+    .select("id, name, timezone, service_hours, tax_rate")
     .limit(1)
     .single();
 
@@ -190,6 +197,7 @@ export async function getMenuWithRunway(now: Date = new Date()): Promise<MenuPay
   return {
     restaurantId: restaurant.id as string,
     restaurantName: restaurant.name as string,
+    taxRate: Number(restaurant.tax_rate ?? 0),
     dishes,
     categories: (cats ?? []) as MenuCategory[],
     serviceOpen,

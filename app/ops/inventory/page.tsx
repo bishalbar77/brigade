@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { LiveFrame } from "@/components/ops/LiveFrame";
 import { Cell, Empty, OpsHeader, Pill, ScopeNote, StaffOnly, Table } from "@/components/ops/ReadOnly";
 import { getPantry } from "@/lib/data/reports";
@@ -16,15 +17,82 @@ import { isStaff } from "@/lib/auth/roles";
 
 export const dynamic = "force-dynamic";
 
-export default async function InventoryPage() {
+/**
+ * What each sortable column sorts by.
+ *
+ * Keyed off the row rather than the rendered text, so "12 kg" sorts as 12 and not
+ * between "1" and "2" — the classic reason a sortable table gets distrusted and then
+ * ignored.
+ */
+type PantryRow = Awaited<ReturnType<typeof getPantry>>["rows"][number];
+
+const SORTS: Record<string, (r: PantryRow) => number | string> = {
+  name: (r) => r.name.toLowerCase(),
+  stock: (r) => r.stockQty,
+  par: (r) => r.parLevel,
+  reorder: (r) => r.suggestion.reorderPoint,
+  usage: (r) => r.dailyUsageQty,
+  supplier: (r) => (r.supplierName ?? "").toLowerCase(),
+  lead: (r) => r.leadTimeDays,
+  cost: (r) => r.costPerUnitCents ?? -1,
+  // "Show me what to order" is the whole reason to open this screen.
+  action: (r) => (r.suggestion.needsOrder ? 0 : 1),
+};
+
+export default async function InventoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ sort?: string; dir?: string; only?: string }>;
+}) {
   const profile = await getCurrentProfile();
   if (!isStaff(profile?.role)) return <StaffOnly what="the pantry" />;
 
-  const pantry = await getPantry();
+  const [pantry, params] = await Promise.all([getPantry(), searchParams]);
+
+  const sortKey = params.sort && SORTS[params.sort] ? params.sort : null;
+  const dir = params.dir === "asc" ? "asc" : "desc";
+  const onlyShort = params.only === "short";
 
   const expiring = pantry.rows.filter(
     (r) => r.shelfLifeDays !== null && r.shelfLifeDays <= 3,
   ).length;
+
+  let rows = onlyShort
+    ? pantry.rows.filter((r) => r.suggestion.needsOrder)
+    : pantry.rows;
+
+  if (sortKey) {
+    const read = SORTS[sortKey]!;
+    rows = [...rows].sort((a, b) => {
+      const av = read(a);
+      const bv = read(b);
+      const cmp =
+        typeof av === "number" && typeof bv === "number"
+          ? av - bv
+          : String(av).localeCompare(String(bv));
+      return dir === "asc" ? cmp : -cmp;
+    });
+  }
+
+  /** Tapping the active column flips the direction; a new column starts descending. */
+  const hrefFor = (key: string) => {
+    const next = new URLSearchParams();
+    next.set("sort", key);
+    next.set("dir", sortKey === key && dir === "desc" ? "asc" : "desc");
+    if (onlyShort) next.set("only", "short");
+    return `/ops/inventory?${next.toString()}`;
+  };
+
+  const filterHref = () => {
+    const next = new URLSearchParams();
+    if (sortKey) {
+      next.set("sort", sortKey);
+      next.set("dir", dir);
+    }
+    if (!onlyShort) next.set("only", "short");
+    const qs = next.toString();
+    return qs ? `/ops/inventory?${qs}` : "/ops/inventory";
+  };
 
   return (
     <LiveFrame channel="pantry" tables={["ingredients"]}>
@@ -53,23 +121,51 @@ export default async function InventoryPage() {
         </ScopeNote>
       )}
 
+      {/* The header already counted how many need ordering and offered no way to act on
+          it. A link rather than a control: it survives a reload and can be pinned open
+          on a wall screen during a delivery. */}
+      <p style={{ marginBottom: "var(--space-4)" }}>
+        <Link
+          href={filterHref() as never}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            minHeight: "44px",
+            padding: "0 var(--space-4)",
+            borderRadius: "999px",
+            border: `1px solid ${onlyShort ? "var(--color-accent)" : "var(--color-border-strong)"}`,
+            background: onlyShort ? "var(--color-accent)" : "transparent",
+            color: onlyShort ? "var(--color-accent-fg)" : "var(--color-fg-muted)",
+            textDecoration: "none",
+            fontSize: "var(--text-step--1)",
+          }}
+        >
+          {onlyShort
+            ? `✓ Needs ordering only (${rows.length})`
+            : `Needs ordering only (${pantry.needsOrder})`}
+        </Link>
+      </p>
+
       {pantry.rows.length === 0 ? (
         <Empty>No ingredients tracked yet.</Empty>
+      ) : rows.length === 0 ? (
+        <Empty>Nothing needs ordering. The pantry is above its reorder points.</Empty>
       ) : (
         <Table
+          sort={{ key: sortKey, dir, hrefFor }}
           head={[
-            "Ingredient",
-            "#In stock",
-            "#Par",
-            "#Reorder at",
-            "#Used/day",
-            "Supplier",
-            "#Lead",
-            ...(pantry.showCost ? ["#Unit cost"] : []),
-            "Action",
+            { label: "Ingredient", sortKey: "name" },
+            { label: "#In stock", sortKey: "stock" },
+            { label: "#Par", sortKey: "par" },
+            { label: "#Reorder at", sortKey: "reorder" },
+            { label: "#Used/day", sortKey: "usage" },
+            { label: "Supplier", sortKey: "supplier" },
+            { label: "#Lead", sortKey: "lead" },
+            ...(pantry.showCost ? [{ label: "#Unit cost", sortKey: "cost" }] : []),
+            { label: "Action", sortKey: "action" },
           ]}
         >
-          {pantry.rows.map((r) => {
+          {rows.map((r) => {
             const short = r.suggestion.needsOrder;
             return (
               <tr key={r.id}>

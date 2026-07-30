@@ -9,13 +9,16 @@ import {
   clearCart,
   overAvailability,
   readCart,
-  removeLine,
+  removeDish,
+  setDishQty,
+  setNotes,
   setQty,
   subtotalCents,
   writeCart,
   type Cart,
+  type CartLine,
 } from "@/lib/cart";
-import { formatCents, taxCents } from "@/lib/money";
+import { formatCents, formatRate, taxCents } from "@/lib/money";
 
 /*
  * The cart, and the moment the concurrency work becomes visible.
@@ -45,12 +48,15 @@ export function CartView({
   tableId,
   tableLabel,
   portionsByDish,
+  taxRate,
   signedIn,
 }: {
   restaurantId: string;
   tableId: string | null;
   tableLabel: string | null;
   portionsByDish: Record<string, number>;
+  /** The restaurant's real rate. Never a literal here — see the note in MenuPayload. */
+  taxRate: number;
   signedIn: boolean;
 }) {
   const router = useRouter();
@@ -76,11 +82,11 @@ export function CartView({
 
   const problems = useMemo(() => overAvailability(cart, portionsByDish), [cart, portionsByDish]);
   const subtotal = subtotalCents(cart);
-  const tax = taxCents(subtotal, 0.08);
+  const tax = taxCents(subtotal, taxRate);
 
-  function update(next: Cart) {
+  function update(next: Cart, announce?: string) {
     setCart(next);
-    writeCart(next);
+    writeCart(next, announce);
   }
 
   async function placeOrder() {
@@ -96,8 +102,11 @@ export function CartView({
         items: cart.lines.map((l) => ({ dishId: l.dishId, qty: l.qty, notes: l.notes })),
         // Double-tapping must not create two orders. The server returns the
         // existing order for a repeated key rather than inserting again.
+        // Notes are part of the key: now that they exist, the same dishes at the same
+        // quantities with a DIFFERENT instruction is a different order, and returning
+        // the previous one would send the old note to the kitchen.
         idempotencyKey: `${restaurantId}:${JSON.stringify(
-          cart.lines.map((l) => [l.dishId, l.qty]),
+          cart.lines.map((l) => [l.dishId, l.qty, l.notes ?? ""]),
         )}`,
       }),
     });
@@ -177,7 +186,9 @@ export function CartView({
               <Fix
                 onClick={() => {
                   const line = cart.lines.find((l) => l.name === failure.dish);
-                  if (line) update(setQty(cart, line.dishId, failure.available!));
+                  // By dish, not by line: the server named a DISH that is short, and
+                  // the guest may have split it across two lines.
+                  if (line) update(setDishQty(cart, line.dishId, failure.available!));
                   setFailure(null);
                 }}
               >
@@ -188,7 +199,7 @@ export function CartView({
               <Fix
                 onClick={() => {
                   const line = cart.lines.find((l) => l.name === failure.dish);
-                  if (line) update(removeLine(cart, line.dishId));
+                  if (line) update(removeDish(cart, line.dishId));
                   setFailure(null);
                 }}
               >
@@ -238,20 +249,20 @@ export function CartView({
             Some of this has moved
           </p>
           <ul style={{ listStyle: "none", padding: 0, display: "grid", gap: "var(--space-3)" }}>
-            {problems.map(({ line, available }) => (
-              <li key={line.dishId}>
+            {problems.map(({ dishId, name, ordered, available }) => (
+              <li key={dishId}>
                 <p style={{ fontSize: "var(--text-step--1)" }}>
                   {available === 0
-                    ? `${line.name} has finished.`
-                    : `Only ${available} ${line.name} left — you have ${line.qty}.`}
+                    ? `${name} has finished.`
+                    : `Only ${available} ${name} left — you have ${ordered}.`}
                 </p>
                 <div style={{ display: "flex", gap: "var(--space-2)", marginTop: "var(--space-2)" }}>
                   {available > 0 && (
-                    <Fix onClick={() => update(setQty(cart, line.dishId, available))}>
+                    <Fix onClick={() => update(setDishQty(cart, dishId, available))}>
                       Reduce to {available}
                     </Fix>
                   )}
-                  <Fix onClick={() => update(removeLine(cart, line.dishId))}>Remove</Fix>
+                  <Fix onClick={() => update(removeDish(cart, dishId))}>Remove</Fix>
                 </div>
               </li>
             ))}
@@ -262,49 +273,70 @@ export function CartView({
       <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: "var(--space-3)" }}>
         {cart.lines.map((line) => (
           <li
-            key={line.dishId}
+            key={line.id}
             style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: "var(--space-4)",
               padding: "var(--space-3) 0",
               borderBottom: "1px solid var(--color-border)",
             }}
           >
-            <div style={{ minWidth: 0 }}>
-              <p style={{ fontWeight: 600 }}>{line.name}</p>
-              <p className="eyebrow">{formatCents(line.unitPriceCents)} each</p>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
-                <Step
-                  label={`One fewer ${line.name}`}
-                  onClick={() => update(setQty(cart, line.dishId, line.qty - 1))}
-                >
-                  −
-                </Step>
-                <span className="mono" style={{ minWidth: "2ch", textAlign: "center" }}>
-                  {line.qty}
-                </span>
-                <Step
-                  label={`One more ${line.name}`}
-                  onClick={() => update(setQty(cart, line.dishId, line.qty + 1))}
-                >
-                  +
-                </Step>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "var(--space-4)",
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <p style={{ fontWeight: 600 }}>{line.name}</p>
+                <p className="eyebrow">{formatCents(line.unitPriceCents)} each</p>
               </div>
-              <p className="mono" style={{ minWidth: "5ch", textAlign: "right" }}>
-                {formatCents(line.unitPriceCents * line.qty)}
-              </p>
+              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+                  <Step
+                    label={`One fewer ${line.name}`}
+                    onClick={() => update(setQty(cart, line.id, line.qty - 1))}
+                  >
+                    −
+                  </Step>
+                  <span className="mono" style={{ minWidth: "2ch", textAlign: "center" }}>
+                    {line.qty}
+                  </span>
+                  <Step
+                    label={`One more ${line.name}`}
+                    onClick={() => update(setQty(cart, line.id, line.qty + 1))}
+                  >
+                    +
+                  </Step>
+                </div>
+                <p className="mono" style={{ minWidth: "5ch", textAlign: "right" }}>
+                  {formatCents(line.unitPriceCents * line.qty)}
+                </p>
+              </div>
             </div>
+
+            {/* A note for the kitchen. The plumbing was already complete — cart →
+                place_order → order_items.notes → the docket, where Docket.tsx renders
+                it in warning colour with a `!`. There was simply no input anywhere in
+                the app, so the field could only ever be empty. */}
+            <NoteField
+              line={line}
+              onCommit={(notes) =>
+                update(
+                  setNotes(cart, line.id, notes),
+                  notes.trim()
+                    ? `Note saved for ${line.name}`
+                    : `Note removed from ${line.name}`,
+                )
+              }
+            />
           </li>
         ))}
       </ul>
 
       <dl style={{ margin: "var(--space-5) 0", display: "grid", gap: "var(--space-2)" }}>
         <Row label="Subtotal" value={formatCents(subtotal)} />
-        <Row label="Tax" value={formatCents(tax)} />
+        <Row label={`Tax (${formatRate(taxRate)})`} value={formatCents(tax)} />
         <Row label="Total" value={formatCents(subtotal + tax)} strong />
       </dl>
       <p className="eyebrow" style={{ marginBottom: "var(--space-4)" }}>
@@ -371,6 +403,97 @@ export function CartView({
         </button>
       )}
     </section>
+  );
+}
+
+/**
+ * A note for one line, collapsed until asked for.
+ *
+ * Local state, committed on blur rather than on every keystroke: writeCart persists to
+ * localStorage and fires the shared live region, and doing that per character would
+ * make a screen reader read the cart total after every letter.
+ *
+ * Capped at 120 characters because the destination is a kitchen docket read at two
+ * metres, not a message box. A paragraph there pushes the next ticket off the screen.
+ */
+function NoteField({
+  line,
+  onCommit,
+}: {
+  line: CartLine;
+  onCommit: (notes: string) => void;
+}) {
+  const [open, setOpen] = useState(Boolean(line.notes));
+  const [text, setText] = useState(line.notes ?? "");
+  const inputId = `note-${line.id}`;
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="eyebrow"
+        style={{
+          marginTop: "var(--space-2)",
+          padding: 0,
+          border: "none",
+          background: "none",
+          color: "var(--color-accent)",
+          font: "inherit",
+          fontSize: "var(--text-step--1)",
+          textDecoration: "underline",
+          cursor: "pointer",
+        }}
+      >
+        + Note for the kitchen
+      </button>
+    );
+  }
+
+  return (
+    <div style={{ marginTop: "var(--space-3)" }}>
+      <label className="eyebrow" htmlFor={inputId}>
+        Note for the kitchen
+      </label>
+      <input
+        id={inputId}
+        type="text"
+        value={text}
+        maxLength={120}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={() => onCommit(text)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            e.currentTarget.blur();
+          }
+        }}
+        placeholder="No chilli, please"
+        style={{
+          width: "100%",
+          minHeight: "44px",
+          marginTop: "var(--space-2)",
+          padding: "0 var(--space-3)",
+          borderRadius: "var(--radius-md)",
+          border: "1px solid var(--color-border-strong)",
+          background: "var(--color-bg-sunken)",
+          color: "var(--color-fg)",
+          font: "inherit",
+          fontSize: "var(--text-step--1)",
+        }}
+      />
+      {/* Not .eyebrow: that uppercases, which is right for a three-word label and wrong
+          for a sentence — two lines of shouting for a quiet aside. */}
+      <p
+        style={{
+          marginTop: "var(--space-1)",
+          color: "var(--color-fg-subtle)",
+          fontSize: "var(--text-step--1)",
+        }}
+      >
+        The kitchen sees this on the ticket. It can&rsquo;t change allergens.
+      </p>
+    </div>
   );
 }
 

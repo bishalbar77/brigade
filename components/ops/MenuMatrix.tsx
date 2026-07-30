@@ -78,8 +78,51 @@ function median(values: number[]): number {
   return s.length % 2 === 0 ? (s[mid - 1]! + s[mid]!) / 2 : s[mid]!;
 }
 
-export function MenuMatrix({ dishes }: { dishes: MatrixDish[] }) {
+/**
+ * How each sortable column of the table twin reads its value.
+ *
+ * Sorted on the underlying number, not the rendered string: `formatCents` produces
+ * "₹1,23,456", and sorting that lexically puts ₹99 above ₹1,000.
+ */
+const MATRIX_SORTS: Record<string, (d: MatrixDish) => number | string> = {
+  dish: (d) => d.name.toLowerCase(),
+  class: (d) => d.menuClass,
+  sold: (d) => d.unitsSold,
+  share: (d) => d.popularity,
+  price: (d) => d.priceCents,
+  cost: (d) => d.foodCostCents,
+  margin: (d) => d.marginCents,
+};
+
+export function MenuMatrix({
+  dishes,
+  sortKey = null,
+  dir = "desc",
+  hrefFor,
+}: {
+  dishes: MatrixDish[];
+  /** Null keeps the default: most popular first, which is how the matrix reads. */
+  sortKey?: string | null;
+  dir?: "asc" | "desc";
+  /** Supplied by the page, which owns the URL. Omit and the headers stay inert. */
+  hrefFor?: (key: string) => string;
+}) {
   if (dishes.length === 0) return null;
+
+  // The chart above always plots every dish; only the table twin below reorders. The
+  // default stays most-popular-first, which is the reading order the matrix implies.
+  const read = sortKey ? MATRIX_SORTS[sortKey] : undefined;
+  const sortedDishes = read
+    ? [...dishes].sort((a, b) => {
+        const av = read(a);
+        const bv = read(b);
+        const cmp =
+          typeof av === "number" && typeof bv === "number"
+            ? av - bv
+            : String(av).localeCompare(String(bv));
+        return dir === "asc" ? cmp : -cmp;
+      })
+    : [...dishes].sort((a, b) => b.popularity - a.popularity);
 
   const pops = dishes.map((d) => d.popularity);
   const margins = dishes.map((d) => d.marginCents);
@@ -230,10 +273,20 @@ export function MenuMatrix({ dishes }: { dishes: MatrixDish[] }) {
         <h3 className="eyebrow" style={{ marginBottom: "var(--space-3)" }}>
           Every dish, and what to do about it
         </h3>
-        <Table head={["Dish", "Class", "#Sold", "#Share", "#Price", "#Food cost", "#Margin", "Action"]}>
-          {[...dishes]
-            .sort((a, b) => b.popularity - a.popularity)
-            .map((d) => (
+        <Table
+          sort={hrefFor ? { key: sortKey, dir, hrefFor } : undefined}
+          head={[
+            { label: "Dish", sortKey: "dish" },
+            { label: "Class", sortKey: "class" },
+            { label: "#Sold", sortKey: "sold" },
+            { label: "#Share", sortKey: "share" },
+            { label: "#Price", sortKey: "price" },
+            { label: "#Food cost", sortKey: "cost" },
+            { label: "#Margin", sortKey: "margin" },
+            "Action",
+          ]}
+        >
+          {sortedDishes.map((d) => (
               <tr key={d.dishId}>
                 <Cell strong>{d.name}</Cell>
                 <Cell>
@@ -254,7 +307,7 @@ export function MenuMatrix({ dishes }: { dishes: MatrixDish[] }) {
                 </Cell>
                 <Cell tone="muted">{CLASS_ACTION[d.menuClass].split(".")[0]}</Cell>
               </tr>
-            ))}
+          ))}
         </Table>
       </div>
     </div>

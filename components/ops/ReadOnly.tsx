@@ -118,38 +118,104 @@ export function ScopeNote({
   );
 }
 
+/**
+ * A column. A bare string is still accepted — a leading `#` still means numeric.
+ * `sortKey` opts that column into sorting.
+ */
+export type HeadCol = string | { label: string; sortKey?: string };
+
+export interface TableSort {
+  /** The column currently sorted, or null for the table's natural order. */
+  key: string | null;
+  dir: "asc" | "desc";
+  /** Where a header should link to in order to sort by `key`. */
+  hrefFor: (key: string) => string;
+}
+
+const headLabel = (h: HeadCol): string => (typeof h === "string" ? h : h.label);
+const headSortKey = (h: HeadCol): string | undefined =>
+  typeof h === "string" ? undefined : h.sortKey;
+
+/**
+ * The shared ops table.
+ *
+ * TWO THINGS THAT WERE WRONG ON A PHONE.
+ *
+ * 1. It was `minWidth: 40rem` inside `.scroll-x`, so all seven ops screens scrolled
+ *    sideways on a phone with no sticky first column — you scrolled right to read a
+ *    number and lost the name of the row it belonged to. The width now lives in CSS so
+ *    a media query can drop it and lay each row out as a stacked label/value card. One
+ *    change to this primitive fixes every screen using it.
+ *
+ * 2. `aria-sort` appeared nowhere in the codebase and no header was sortable, on a
+ *    9-column pantry table. Sorting is done with LINKS and search params rather than
+ *    client state: it survives a reload, it can be pinned on a wall screen, and it
+ *    needs no JavaScript on a surface that has to keep working for eight hours.
+ */
 export function Table({
   head,
+  sort,
   children,
 }: {
-  head: string[];
+  head: HeadCol[];
+  sort?: TableSort;
   children: React.ReactNode;
 }) {
+  // Column labels are handed to CSS so the mobile card layout can print each value's
+  // label from ::before. Doing it here means the seven consuming pages need no change.
+  const labelVars = Object.fromEntries(
+    head.map((h, i) => [`--col-${i + 1}`, JSON.stringify(headLabel(h).replace(/^#/, ""))]),
+  ) as React.CSSProperties;
+
   return (
     <div className="scroll-x">
-      <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "40rem" }}>
+      <table className="ops-table" style={labelVars}>
         <thead>
           <tr>
-            {head.map((h) => (
-              <th
-                key={h}
-                scope="col"
-                style={{
-                  textAlign: h.startsWith("#") ? "right" : "left",
-                  padding: "var(--space-2) var(--space-3)",
-                  borderBottom: "1px solid var(--color-border-strong)",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "var(--text-step--1)",
-                  fontWeight: 400,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                  color: "var(--color-fg-subtle)",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {h.replace(/^#/, "")}
-              </th>
-            ))}
+            {head.map((h) => {
+              const label = headLabel(h);
+              const key = headSortKey(h);
+              const active = sort && key && sort.key === key;
+              const text = label.replace(/^#/, "");
+
+              return (
+                <th
+                  key={label}
+                  scope="col"
+                  aria-sort={
+                    active ? (sort!.dir === "asc" ? "ascending" : "descending") : undefined
+                  }
+                  style={{
+                    textAlign: label.startsWith("#") ? "right" : "left",
+                    padding: "var(--space-2) var(--space-3)",
+                    borderBottom: "1px solid var(--color-border-strong)",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "var(--text-step--1)",
+                    fontWeight: 400,
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                    color: active ? "var(--color-fg)" : "var(--color-fg-subtle)",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {sort && key ? (
+                    <Link
+                      href={sort.hrefFor(key) as never}
+                      style={{ color: "inherit", textDecoration: "none" }}
+                    >
+                      {text}
+                      {/* An arrow AND aria-sort AND the brighter label: three channels,
+                          because a wall screen is read through glare. */}
+                      <span aria-hidden="true">
+                        {active ? (sort.dir === "asc" ? " ↑" : " ↓") : " ↕"}
+                      </span>
+                    </Link>
+                  ) : (
+                    text
+                  )}
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody>{children}</tbody>
@@ -213,8 +279,12 @@ export function Pill({
   } as const;
   const [border, fg] = map[tone];
   return (
+    // `white-space` lives in .ops-pill rather than here so the phone-width card layout
+    // can override it. As an inline style it could only be beaten with !important —
+    // and it must NOT be dropped outright: a pill that wraps freely on a wall screen
+    // turns one table row into five lines, one word per line.
     <span
-      className="mono"
+      className="mono ops-pill"
       style={{
         display: "inline-block",
         padding: "1px var(--space-2)",
@@ -222,7 +292,6 @@ export function Pill({
         borderRadius: "999px",
         color: fg,
         fontSize: "var(--text-step--1)",
-        whiteSpace: "nowrap",
       }}
     >
       {children}

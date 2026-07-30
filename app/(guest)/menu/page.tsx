@@ -44,6 +44,7 @@ export default async function MenuPage() {
         name: d.name,
         description: d.description,
         priceCents: d.priceCents,
+        imageUrl: d.imageUrl,
         tags: d.tags,
         allergens: d.allergens,
       }))}

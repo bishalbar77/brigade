@@ -51,7 +51,8 @@ export default async function ReservePage() {
   // reservations_read_own shows them only their own — so querying them here returned
   // no tables and no bookings, and this page drew every slot as free while the API
   // refused all of them. See supabase/patches/005_booking_capacity.sql.
-  const [{ data: capacity }, { data: booked }, { data: myQueue }] = await Promise.all([
+  const [{ data: capacity }, { data: booked }, { data: myQueue }, { data: myBookings }] =
+    await Promise.all([
     supabase
       .from("restaurant_table_count")
       .select("table_count")
@@ -71,11 +72,29 @@ export default async function ReservePage() {
           .in("status", ["waiting", "notified"])
           .maybeSingle()
       : Promise.resolve({ data: null }),
+    // The diner's own bookings. `reservations_read_own` has always permitted this;
+    // nothing ever asked. Without it a booking vanished on reload with no reference,
+    // no confirmation to come back to and no way to tell whether it had worked.
+    user
+      ? supabase
+          .from("reservations")
+          .select("id, requested_at, party_size, status")
+          .eq("guest_id", user.id)
+          .gte("requested_at", now.toISOString())
+          .in("status", ["booked", "seated"])
+          .order("requested_at")
+      : Promise.resolve({ data: null }),
   ]);
 
   const tableCount = (capacity as { table_count: number } | null)?.table_count ?? 1;
 
-  const days: { key: string; label: string; slots: Slot[]; closed: boolean }[] = [];
+  const days: {
+    key: string;
+    label: string;
+    dateLabel: string;
+    slots: Slot[];
+    closed: boolean;
+  }[] = [];
 
   for (let d = 0; d < DAYS_AHEAD; d++) {
     const date = new Date(now);
@@ -107,6 +126,10 @@ export default async function ReservePage() {
             minute: "2-digit",
             timeZone,
           }),
+          // Carried through so the UI can separate the two services. Fourteen
+          // undivided buttons running from noon to eleven made lunch and dinner look
+          // like one continuous nine-hour sitting.
+          service: w.name === "lunch" ? "lunch" : "dinner",
           available: clash < tableCount,
         });
       }
@@ -118,6 +141,13 @@ export default async function ReservePage() {
         d === 0
           ? "Today"
           : date.toLocaleDateString("en-GB", { weekday: "short", timeZone }),
+      // The weekday alone was ambiguous past the first "Fri" — four days ahead can
+      // reach the same weekday name, and "Sat" tells you nothing about which Saturday.
+      dateLabel: date.toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        timeZone,
+      }),
       slots,
       // "No windows at all" and "windows existed but every slot has passed" are
       // different facts and need different copy. Conflating them tells a guest the
@@ -126,7 +156,8 @@ export default async function ReservePage() {
     });
   }
 
-  const queueRow = (myQueue as { quoted_minutes: number | null } | null) ?? null;
+  const queueRow =
+    (myQueue as { quoted_minutes: number | null; joined_at: string } | null) ?? null;
 
   return (
     <ReserveView
@@ -134,8 +165,36 @@ export default async function ReservePage() {
       days={days}
       signedIn={Boolean(user)}
       existingQueue={
-        queueRow ? { position: 1, quotedMinutes: queueRow.quoted_minutes } : null
+        queueRow
+          ? {
+              /*
+               * NULL, not 1.
+               *
+               * This used to be hardcoded to `position: 1`, so every returning guest
+               * was told they were next regardless of the queue. The real position
+               * needs a count of OTHER parties' rows, and `queue_read_own` correctly
+               * refuses that — a guest reads their own entry and nothing else. Computing
+               * it would take a security-definer view like `reservation_load`.
+               *
+               * So: `join_queue()` returns the real position at the moment of joining
+               * and that is shown then. On a later page load the number is unknown, and
+               * the card says what it does know — when they joined and the current
+               * quote — rather than inventing a rank. An honest gap beats a confident
+               * wrong answer about how long someone is waiting.
+               */
+              position: null,
+              quotedMinutes: queueRow.quoted_minutes,
+              joinedAt: queueRow.joined_at,
+            }
+          : null
       }
+      myBookings={(myBookings ?? []).map((b) => ({
+        id: b.id as string,
+        requestedAt: b.requested_at as string,
+        partySize: b.party_size as number,
+        status: b.status as string,
+      }))}
+      timeZone={timeZone}
     />
   );
 }

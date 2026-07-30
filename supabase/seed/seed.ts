@@ -17,6 +17,7 @@ import {
   CATEGORIES, COVERS_BY_WEEKDAY, DEMO_PASSWORD, DISHES, GUESTS, INGREDIENTS,
   SERVICE_HOURS, STAFF, SUPPLIERS, TABLES, type SeedDish,
 } from "./data";
+import { IMAGE_BUCKET, imageObjectPath } from "./dish-images";
 
 const WEEKS_OF_HISTORY = 6;
 const RESTAURANT_SLUG = "brigade-demo";
@@ -300,15 +301,37 @@ async function main(): Promise<void> {
   ).select("id, name");
   const categoryIds = new Map((categories ?? []).map((c) => [c.name, c.id]));
 
+  /*
+   * Photographs survive a re-seed.
+   *
+   * This function truncates and rebuilds `dishes`, so `image_url` was going to be lost
+   * every run — and re-fetching 28 files from Wikimedia Commons on every seed would be
+   * both slow and rude. The storage path is a pure function of the dish name
+   * (imageObjectPath), so the URL can be reconstructed from the bucket alone.
+   *
+   * Only for objects that are ACTUALLY THERE. Writing a URL for a missing object would
+   * put a broken image on the menu, which looks worse than the gradient stand-in the
+   * card falls back to. An empty or absent bucket simply means no photos.
+   */
+  const { data: storedImages } = await db.storage.from(IMAGE_BUCKET).list("", { limit: 1000 });
+  const haveImage = new Set((storedImages ?? []).map((o) => o.name));
+  const publicUrl = (dishName: string) =>
+    haveImage.has(imageObjectPath(dishName))
+      ? db.storage.from(IMAGE_BUCKET).getPublicUrl(imageObjectPath(dishName)).data.publicUrl
+      : null;
+
   const { data: dishes } = await db.from("dishes").insert(
     DISHES.map((d, idx) => ({
       restaurant_id: restaurantId, category_id: categoryIds.get(d.category) ?? null,
       name: d.name, description: d.description, price_cents: d.priceCents,
       station: d.station, prep_minutes: d.prepMinutes, tags: d.tags, allergens: d.allergens,
-      sort: idx,
+      image_url: publicUrl(d.name), sort: idx,
     })),
   ).select("id, name, price_cents, station");
   const dishIds = new Map((dishes ?? []).map((d) => [d.name, d.id]));
+  console.log(
+    `  ${haveImage.size} dish photo(s) in storage; ${DISHES.filter((d) => publicUrl(d.name)).length} dishes illustrated`,
+  );
 
   await chunkInsert("recipe_items", DISHES.flatMap((d) =>
     d.recipe.map((r) => ({

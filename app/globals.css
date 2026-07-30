@@ -94,6 +94,11 @@
   --dur-slow: 480ms;
 
   /* portion gauge geometry — overridden at ops density */
+  /* Declared so the sticky category strip on /menu can sit exactly below the sticky
+     guest header instead of guessing at its height. The header is pinned to the same
+     value, so the two cannot drift apart. */
+  --guest-header-h: 4.25rem;
+
   --gauge-tick-w: 7px;
   --gauge-tick-h: 20px;
   --gauge-gap: 3px;
@@ -304,6 +309,177 @@
   [data-density="guest"] a[role="button"] {
     min-height: 44px;
   }
+
+  /*
+   * Visually hidden, still announced.
+   *
+   * The clip-rect technique, not `left: -9999px` — an off-screen element that takes
+   * focus scrolls the viewport to it, which is what makes a skip link jump the page
+   * sideways. `white-space: nowrap` stops a long announcement wrapping into a 1px box
+   * and being reported as empty by some screen readers.
+   */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /*
+   * Skip to content: hidden until focused, then a real, visible target.
+   *
+   * First tab stop in all three shells. A guest never sees it; someone on a keyboard
+   * or a switch device would otherwise walk the whole header on every page.
+   */
+  .skip-link {
+    position: absolute;
+    top: var(--space-2);
+    left: var(--space-2);
+    z-index: 100;
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 var(--space-4);
+    border-radius: var(--radius-md);
+    background: var(--color-accent);
+    color: var(--color-accent-fg);
+    font-weight: 600;
+    text-decoration: none;
+    transform: translateY(calc(-100% - var(--space-4)));
+    transition: transform var(--dur-fast) var(--ease-out-brigade);
+  }
+
+  .skip-link:focus-visible {
+    transform: translateY(0);
+  }
+}
+
+/*
+ * ── The audience chooser on the landing page ─────────────────────────────────
+ *
+ * Stacked on a phone, side by side the moment there is room. Two cards squeezed into
+ * 375px would each be too narrow to read the supporting line, which is the part that
+ * tells someone which one is theirs.
+ */
+@media (min-width: 30em) {
+  .audience-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/*
+ * ── Ops tables ───────────────────────────────────────────────────────────────
+ *
+ * Wide by default, because a wall screen has the room and a dense grid is the point.
+ *
+ * On a phone the same table was 40rem inside a horizontal scroller with no sticky
+ * column: you scrolled right to read "needs ordering" and lost which ingredient it
+ * belonged to. Below 640px each row becomes a stacked label/value card instead.
+ *
+ * The labels come from --col-N, which components/ops/ReadOnly.tsx sets on the table
+ * from the same `head` array the real header row uses. That keeps ONE source for the
+ * column names — a hand-maintained second copy in `data-label` attributes would drift
+ * the first time a column was renamed.
+ */
+.ops-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 40rem;
+}
+
+/* A status pill stays on one line in a wide table — wrapping one there costs the row
+   five lines of height on the wall screen. The card layout below relaxes it. */
+.ops-pill {
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  /*
+   * `display: block`, not merely `min-width: 0`.
+   *
+   * Dropping the min-width alone was not enough: a `display: table` box is
+   * shrink-to-fit, so it sized itself to the max-content width of its cells — label
+   * plus value on one unbroken line — which was still far wider than a phone. The
+   * table stayed 700-odd pixels inside `.scroll-x`, and every long value ("Chicken
+   * thigh, bone-in", "Deonar Halal Meats") was cut off at the right edge instead of
+   * wrapping. As a block box it fills the container and the cells wrap.
+   */
+  .ops-table {
+    min-width: 0;
+    display: block;
+    width: 100%;
+  }
+
+  .ops-table tbody {
+    display: block;
+  }
+
+  /* The header row's job is done by the per-cell labels below. Hidden visually but
+     still announced, so the table keeps its column semantics. */
+  .ops-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .ops-table tr {
+    display: block;
+    margin-bottom: var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-bg-raised);
+  }
+
+  .ops-table td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-4);
+    /* The value is an anonymous flex item, so it cannot be selected directly; letting
+       it wrap is what keeps a long supplier name inside the card. */
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+
+  .ops-table td:last-child {
+    border-bottom: none;
+  }
+
+  /* Here the pill has a whole card row to itself, so wrapping costs nothing — and
+     "order 9.04 kg · shelf-life capped" losing its second half to the edge would cost
+     the reason the quantity was capped, which is the useful part. */
+  .ops-pill {
+    white-space: normal;
+    text-wrap: balance;
+  }
+
+  .ops-table td::before {
+    content: var(--col, "");
+    flex-shrink: 0;
+    font-family: var(--font-mono);
+    font-size: var(--text-step--1);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-fg-subtle);
+  }
+
+  .ops-table td:nth-child(1)::before { content: var(--col-1, ""); }
+  .ops-table td:nth-child(2)::before { content: var(--col-2, ""); }
+  .ops-table td:nth-child(3)::before { content: var(--col-3, ""); }
+  .ops-table td:nth-child(4)::before { content: var(--col-4, ""); }
+  .ops-table td:nth-child(5)::before { content: var(--col-5, ""); }
+  .ops-table td:nth-child(6)::before { content: var(--col-6, ""); }
+  .ops-table td:nth-child(7)::before { content: var(--col-7, ""); }
+  .ops-table td:nth-child(8)::before { content: var(--col-8, ""); }
+  .ops-table td:nth-child(9)::before { content: var(--col-9, ""); }
+  .ops-table td:nth-child(10)::before { content: var(--col-10, ""); }
 }
 
 /*

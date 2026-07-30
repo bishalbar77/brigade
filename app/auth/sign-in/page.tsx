@@ -10,7 +10,9 @@ import {
   ErrorNote,
   Field,
   GoogleButton,
+  PasswordField,
   SubmitButton,
+  looksLikeEmail,
 } from "@/components/auth/AuthShell";
 import { createClient } from "@/lib/supabase/client";
 import { homeFor } from "@/lib/auth/roles";
@@ -31,9 +33,23 @@ function SignInForm() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
 
   async function signIn(e: React.FormEvent) {
     e.preventDefault();
+
+    // Checked here because the form is noValidate, which switched the browser's own
+    // checks off without replacing them. A missing @ used to make a round trip and come
+    // back as "That email and password don't match an account" — which is not the
+    // problem and does not tell you where to look.
+    const next: { email?: string; password?: string } = {};
+    if (!email.trim()) next.email = "Enter your email address.";
+    else if (!looksLikeEmail(email)) next.email = "That doesn’t look like an email address.";
+    if (!password) next.password = "Enter your password.";
+
+    setFieldErrors(next);
+    if (next.email || next.password) return;
+
     setBusy(true);
     setError(null);
     const supabase = createClient();
@@ -103,17 +119,26 @@ function SignInForm() {
           type="email"
           autoComplete="email"
           required
+          error={fieldErrors.email}
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          // The error clears as soon as you start fixing it. Leaving it up while
+          // someone types the correction reads as the fix not working.
+          onChange={(e) => {
+            setEmail(e.target.value);
+            setFieldErrors((f) => ({ ...f, email: undefined }));
+          }}
         />
-        <Field
+        <PasswordField
           label="Password"
           name="password"
-          type="password"
           autoComplete="current-password"
           required
+          error={fieldErrors.password}
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={(e) => {
+            setPassword(e.target.value);
+            setFieldErrors((f) => ({ ...f, password: undefined }));
+          }}
         />
         <SubmitButton busy={busy}>Sign in</SubmitButton>
       </form>

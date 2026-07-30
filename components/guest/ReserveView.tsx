@@ -18,21 +18,51 @@ import { useRouter } from "next/navigation";
 export interface Slot {
   iso: string;
   label: string;
+  service: "lunch" | "dinner";
   available: boolean;
 }
 
-const PARTY_SIZES = [1, 2, 3, 4, 5, 6] as const;
+export interface Booking {
+  id: string;
+  requestedAt: string;
+  partySize: number;
+  status: string;
+}
+
+/**
+ * Exact numbers, up to eight.
+ *
+ * The last option used to read "6+" and send `partySize: 6`. A party of nine tapped
+ * "6+", was quietly booked as six, and would have arrived to a table for six — the
+ * kind of silent substitution that ruins an evening. Anything above eight needs a
+ * human to join tables, so it says so instead of pretending.
+ */
+const PARTY_SIZES = [1, 2, 3, 4, 5, 6, 7, 8] as const;
+
+const SERVICES = [
+  { key: "lunch", label: "Lunch" },
+  { key: "dinner", label: "Dinner" },
+] as const;
 
 export function ReserveView({
   restaurantId,
   days,
   signedIn,
   existingQueue,
+  myBookings,
+  timeZone,
 }: {
   restaurantId: string;
-  days: { key: string; label: string; slots: Slot[]; closed: boolean }[];
+  days: { key: string; label: string; dateLabel: string; slots: Slot[]; closed: boolean }[];
   signedIn: boolean;
-  existingQueue: { position: number; quotedMinutes: number | null } | null;
+  existingQueue: {
+    /** Null when it cannot be known — see the note in reserve/page.tsx. */
+    position: number | null;
+    quotedMinutes: number | null;
+    joinedAt: string;
+  } | null;
+  myBookings: Booking[];
+  timeZone: string;
 }) {
   const router = useRouter();
   const [party, setParty] = useState(2);
@@ -45,9 +75,27 @@ export function ReserveView({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [booked, setBooked] = useState<string | null>(null);
-  const [queued, setQueued] = useState<{ position: number; quotedMinutes: number } | null>(null);
+  const [queued, setQueued] = useState<{
+    position: number | null;
+    quotedMinutes: number | null;
+    joinedAt: string;
+  } | null>(null);
 
   const day = days.find((d) => d.key === dayKey) ?? days[0];
+
+  const fmtDate = (iso: string) =>
+    new Date(iso).toLocaleDateString("en-GB", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      timeZone,
+    });
+  const fmtTime = (iso: string) =>
+    new Date(iso).toLocaleTimeString("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone,
+    });
 
   async function book() {
     if (!slot) return;
@@ -86,21 +134,30 @@ export function ReserveView({
       setError(body.message ?? "Couldn't join the queue.");
       return;
     }
-    setQueued({ position: body.position ?? 1, quotedMinutes: body.quotedMinutes ?? 0 });
+    // The server DID just tell us the real position, so this is the one moment it can
+    // honestly be shown. `?? null` rather than `?? 1`: if the API omitted it, say
+    // nothing rather than claim they're next.
+    setQueued({
+      position: body.position ?? null,
+      quotedMinutes: body.quotedMinutes ?? null,
+      joinedAt: new Date().toISOString(),
+    });
     router.refresh();
   }
 
   const inQueue = queued ?? existingQueue;
 
   if (booked) {
-    const when = new Date(booked);
     return (
       <section style={{ padding: "var(--space-6) var(--space-4)" }}>
         <h1 style={{ fontSize: "var(--text-step-2)" }}>Table booked</h1>
         <p style={{ color: "var(--color-fg-muted)", margin: "var(--space-4) 0" }}>
-          {party} {party === 1 ? "person" : "people"} on{" "}
-          {when.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })} at{" "}
-          {when.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}.
+          {party} {party === 1 ? "person" : "people"} on {fmtDate(booked)} at {fmtTime(booked)}.
+        </p>
+        {/* It is now findable again, which it was not: a booking used to disappear on
+            reload with nothing to come back to. */}
+        <p style={{ color: "var(--color-fg-muted)", marginBottom: "var(--space-4)" }}>
+          You&rsquo;ll find this on the booking page whenever you&rsquo;re signed in.
         </p>
         <Link href="/menu" style={{ color: "var(--color-accent)" }}>
           See what&rsquo;s on tonight →
@@ -149,16 +206,68 @@ export function ReserveView({
               margin: "var(--space-2) 0",
             }}
           >
-            Position {inQueue.position}
+            {/* Only when it is actually known. See the note in reserve/page.tsx. */}
+            {inQueue.position !== null
+              ? `Position ${inQueue.position}`
+              : `Joined at ${fmtTime(inQueue.joinedAt)}`}
           </p>
-          {inQueue.quotedMinutes !== null && (
+          {inQueue.quotedMinutes !== null ? (
             <p style={{ color: "var(--color-fg-muted)" }}>
               {/* A RANGE, never a single number. */}
               Roughly {Math.max(5, inQueue.quotedMinutes - 5)}–{inQueue.quotedMinutes + 10} minutes,
               based on how long tables are actually taking tonight.
             </p>
+          ) : (
+            <p style={{ color: "var(--color-fg-muted)" }}>
+              We&rsquo;ll let you know when your table is nearly ready.
+            </p>
           )}
         </div>
+      )}
+
+      {/* The diner's own bookings. reservations_read_own always allowed this read;
+          nothing ever performed it, so a confirmed table left no trace anywhere in the
+          app once the success screen was dismissed. */}
+      {myBookings.length > 0 && (
+        <section style={{ marginBottom: "var(--space-5)" }}>
+          <h2 className="eyebrow" style={{ marginBottom: "var(--space-2)" }}>
+            Your table{myBookings.length === 1 ? "" : "s"}
+          </h2>
+          <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: "var(--space-2)" }}>
+            {myBookings.map((b) => (
+              <li
+                key={b.id}
+                style={{
+                  display: "flex",
+                  alignItems: "baseline",
+                  justifyContent: "space-between",
+                  gap: "var(--space-3)",
+                  padding: "var(--space-3) var(--space-4)",
+                  border: "1px solid var(--color-border)",
+                  borderRadius: "var(--radius-md)",
+                  background: "var(--color-bg-raised)",
+                  flexWrap: "wrap",
+                }}
+              >
+                <span style={{ fontWeight: 600 }}>
+                  {fmtDate(b.requestedAt)}, {fmtTime(b.requestedAt)}
+                </span>
+                <span className="eyebrow" style={{ color: "var(--color-fg-muted)" }}>
+                  {b.partySize} {b.partySize === 1 ? "person" : "people"}
+                  {b.status === "seated" ? " · seated" : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {/* Cancelling needs an UPDATE a guest does not have — reservations_read_own is
+              a read policy. Saying who can is better than a button that fails. */}
+          <p
+            className="eyebrow"
+            style={{ marginTop: "var(--space-2)", color: "var(--color-fg-subtle)" }}
+          >
+            Need to change or cancel one? Ask us and we&rsquo;ll sort it.
+          </p>
+        </section>
       )}
 
       <fieldset style={{ border: "none", padding: 0, margin: "0 0 var(--space-5)" }}>
@@ -168,10 +277,16 @@ export function ReserveView({
         <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
           {PARTY_SIZES.map((n) => (
             <Choice key={n} on={party === n} onClick={() => setParty(n)}>
-              {n === 6 ? "6+" : n}
+              {n}
             </Choice>
           ))}
         </div>
+        <p
+          className="eyebrow"
+          style={{ marginTop: "var(--space-2)", color: "var(--color-fg-subtle)" }}
+        >
+          More than eight? Ask us — we&rsquo;ll join tables
+        </p>
       </fieldset>
 
       <fieldset style={{ border: "none", padding: 0, margin: "0 0 var(--space-5)" }}>
@@ -188,7 +303,14 @@ export function ReserveView({
                 setSlot(null);
               }}
             >
-              {d.label}
+              {/* Weekday AND date. "Sat" alone does not say which Saturday, and past
+                  the first one the guest is guessing. */}
+              <span style={{ display: "grid", lineHeight: 1.15, textAlign: "center" }}>
+                <span>{d.label}</span>
+                <span className="mono" style={{ fontSize: "var(--text-step--1)", opacity: 0.75 }}>
+                  {d.dateLabel}
+                </span>
+              </span>
             </Choice>
           ))}
         </div>
@@ -205,24 +327,46 @@ export function ReserveView({
               : "No times left today — try tomorrow, or join the queue below."}
           </p>
         ) : (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(5.5rem, 1fr))",
-              gap: "var(--space-2)",
-            }}
-          >
-            {day.slots.map((s) => (
-              <Choice
-                key={s.iso}
-                on={slot === s.iso}
-                disabled={!s.available}
-                onClick={() => setSlot(s.iso)}
+          /*
+           * Lunch and dinner, separately.
+           *
+           * These are two sittings with a closed kitchen between them, and flattening
+           * them produced one undivided run of ~14 buttons from noon to eleven — which
+           * reads as a restaurant that serves continuously all day. A guest scanning
+           * for "somewhere around eight" had to work out where dinner began.
+           *
+           * A service with no slots left is omitted rather than shown empty.
+           */
+          SERVICES.filter((svc) => day.slots.some((s) => s.service === svc.key)).map((svc) => (
+            <div key={svc.key} style={{ marginBottom: "var(--space-4)" }}>
+              <p
+                className="eyebrow"
+                style={{ marginBottom: "var(--space-2)", color: "var(--color-fg-muted)" }}
               >
-                {s.label}
-              </Choice>
-            ))}
-          </div>
+                {svc.label}
+              </p>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(5.5rem, 1fr))",
+                  gap: "var(--space-2)",
+                }}
+              >
+                {day.slots
+                  .filter((s) => s.service === svc.key)
+                  .map((s) => (
+                    <Choice
+                      key={s.iso}
+                      on={slot === s.iso}
+                      disabled={!s.available}
+                      onClick={() => setSlot(s.iso)}
+                    >
+                      {s.label}
+                    </Choice>
+                  ))}
+              </div>
+            </div>
+          ))
         )}
         <p
           className="eyebrow"

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Spinner } from "@/components/Busy";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { formatCents, tipFromPercent } from "@/lib/money";
+import { formatCents, formatRate, taxCents, tipFromPercent } from "@/lib/money";
 import type { ItemStatus } from "@/lib/ops/tickets";
 
 /*
@@ -55,7 +55,7 @@ export function BillView({
   const pending = lines.filter((l) => l.status !== "served" && l.status !== "voided");
 
   const subtotal = served.reduce((sum, l) => sum + l.unitPriceCents * l.qty, 0);
-  const tax = Math.round(subtotal * taxRate);
+  const tax = taxCents(subtotal, taxRate);
   const tip = tipFromPercent(subtotal, tipPct);
   const total = subtotal + tax + tip;
 
@@ -247,7 +247,7 @@ export function BillView({
 
       <dl style={{ margin: "var(--space-5) 0", display: "grid", gap: "var(--space-2)" }}>
         <Row label="Subtotal" value={formatCents(subtotal)} />
-        <Row label={`Tax (${(taxRate * 100).toFixed(0)}%)`} value={formatCents(tax)} />
+        <Row label={`Tax (${formatRate(taxRate)})`} value={formatCents(tax)} />
         {tip > 0 && <Row label={`Tip (${tipPct}%)`} value={formatCents(tip)} />}
         <Row label="Total" value={formatCents(total)} strong />
       </dl>

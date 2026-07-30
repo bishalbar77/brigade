@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { addLine, readCart, writeCart } from "@/lib/cart";
 
@@ -32,8 +32,13 @@ export function AddToOrder({
   const router = useRouter();
   const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const max = unlimited ? 20 : Math.min(portions, 20);
+
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current);
+  }, []);
 
   // If availability drops while this page is open, don't let a stale quantity sit
   // in the stepper waiting to fail.
@@ -58,8 +63,14 @@ export function AddToOrder({
 
   function add() {
     const cart = addLine(readCart(), { dishId, name, unitPriceCents }, qty);
-    writeCart(cart);
+    // The announcement names the dish and the quantity, because the button label
+    // changing to "Added" is not something a screen reader reports.
+    writeCart(cart, `${qty} × ${name} added`);
     setAdded(true);
+    // "Added" used to be a one-way door: it was set once and never cleared, so a
+    // second tap changed nothing on screen and read as a tap that did not land.
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => setAdded(false), 1600);
     router.refresh();
   }
 

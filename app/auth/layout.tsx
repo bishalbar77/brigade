@@ -22,6 +22,10 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       data-density="guest"
       style={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}
     >
+      <a href="#main" className="skip-link">
+        Skip to the form
+      </a>
+
       <header
         style={{
           display: "flex",
@@ -45,7 +49,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         </Link>
       </header>
 
-      <main style={{ flex: 1, width: "100%", maxWidth: "40rem", margin: "0 auto" }}>
+      <main id="main" style={{ flex: 1, width: "100%", maxWidth: "40rem", margin: "0 auto" }}>
         {children}
       </main>
     </div>

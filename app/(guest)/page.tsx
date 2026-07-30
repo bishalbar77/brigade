@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { RunwayMeter } from "@/components/runway/RunwayMeter";
+import { homeFor, isStaff, ROLE_TITLE, type AppRole } from "@/lib/auth/roles";
 import { getMenuWithRunway } from "@/lib/data/menu";
+import { getCurrentProfile } from "@/lib/supabase/server";
 
 /*
  * Landing. The hero PROVES the product rather than describing it: a real dish
@@ -15,7 +17,15 @@ import { getMenuWithRunway } from "@/lib/data/menu";
 export const dynamic = "force-dynamic";
 
 export default async function LandingPage() {
-  const { dishes, serviceOpen } = await getMenuWithRunway();
+  // Both reads in parallel: the profile only decides where the staff card points, so
+  // it must not sit behind the menu query.
+  const [{ dishes, serviceOpen }, profile] = await Promise.all([
+    getMenuWithRunway(),
+    getCurrentProfile(),
+  ]);
+
+  const role = (profile?.role as string | null) ?? null;
+  const staff = isStaff(role);
 
   // Lead with the dish closest to running out — the sharpest evidence available.
   // byUrgency already ordered them, so the scarce ones are first.
@@ -192,12 +202,95 @@ export default async function LandingPage() {
           works out <em>when</em> that will happen, tells the kitchen while there is still
           time to act, and shows you before you order.
         </p>
-        <p style={{ marginTop: "var(--space-4)" }}>
-          <Link href="/ops/kds" className="eyebrow" style={{ color: "var(--color-accent)" }}>
-            Staff → the pass
-          </Link>
-        </p>
+      </section>
+
+      {/*
+        Who are you?
+
+        Brigade is two products in one deployment — a menu for a diner and a kitchen
+        system for the brigade — and until now the entire staff half hung off one
+        `.eyebrow` link below the fold, styled like a footnote. A cook arriving on a
+        wall screen had to know to look for it.
+
+        Placed AFTER the hero and the proof on purpose: the thesis still leads, and a
+        diner who has already tapped "See what's on" never reaches this. It is for the
+        person who landed here not knowing which half of the product is theirs.
+      */}
+      <section
+        aria-labelledby="audience"
+        style={{
+          marginTop: "var(--space-8)",
+          paddingTop: "var(--space-6)",
+          borderTop: "1px solid var(--color-border)",
+        }}
+      >
+        <h2 id="audience" className="eyebrow" style={{ marginBottom: "var(--space-4)" }}>
+          Where are you headed
+        </h2>
+
+        <div
+          className="audience-grid"
+          style={{ display: "grid", gap: "var(--space-3)" }}
+        >
+          <AudienceCard
+            href="/menu"
+            title="I’m eating here"
+            detail="Tonight’s menu, with what’s actually left"
+          />
+          <AudienceCard
+            // A signed-in cook goes straight to their own station's screen; anyone else
+            // signs in first and is returned to the pass rather than dumped on /menu.
+            href={staff ? homeFor(role) : "/auth/sign-in?returnTo=/ops/kds"}
+            title="I’m on the team"
+            detail={
+              staff
+                ? `Signed in as ${ROLE_TITLE[(role ?? "guest") as AppRole] ?? "staff"} — go to your screen`
+                : "The pass, the runway board and the pantry"
+            }
+          />
+        </div>
       </section>
     </div>
+  );
+}
+
+function AudienceCard({
+  href,
+  title,
+  detail,
+}: {
+  href: string;
+  title: string;
+  detail: string;
+}) {
+  return (
+    <Link
+      href={href as never}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-2)",
+        padding: "var(--space-5)",
+        border: "1px solid var(--color-border-strong)",
+        borderRadius: "var(--radius-lg)",
+        background: "var(--color-bg-raised)",
+        color: "var(--color-fg)",
+        textDecoration: "none",
+      }}
+    >
+      <span
+        style={{
+          fontFamily: "var(--font-display)",
+          fontWeight: 700,
+          fontSize: "var(--text-step-1)",
+          letterSpacing: "-0.01em",
+        }}
+      >
+        {title}
+      </span>
+      <span style={{ color: "var(--color-fg-muted)", fontSize: "var(--text-step--1)" }}>
+        {detail}
+      </span>
+    </Link>
   );
 }

@@ -37,6 +37,12 @@ export default async function OpsLayout({ children }: { children: React.ReactNod
       data-density="ops"
       style={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}
     >
+      {/* Ops has seven nav entries plus an account block. On a phone that is a long
+          walk to the dockets, and the KDS is a keyboard surface by design — no mouse. */}
+      <a href="#main" className="skip-link">
+        Skip to the pass
+      </a>
+
       <header
         // .ops-header lets the narrow-viewport rule give the nav its own full-width row
         // instead of squeezing it beside the wordmark and the account block. `relative`
@@ -101,7 +107,7 @@ export default async function OpsLayout({ children }: { children: React.ReactNod
         />
       </header>
 
-      <main style={{ flex: 1, padding: "var(--space-4)" }}>{children}</main>
+      <main id="main" style={{ flex: 1, padding: "var(--space-4)" }}>{children}</main>
     </div>
   );
 }

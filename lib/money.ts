@@ -38,6 +38,17 @@ export function taxCents(subtotalCents: number, rate: number): number {
   return Math.round(subtotalCents * rate);
 }
 
+/**
+ * A tax rate as a percentage, for a label beside the amount.
+ *
+ * Trailing zeros are dropped, so 0.05 reads "5%" and 0.075 reads "7.5%" rather than the
+ * rounded "8%" a `toFixed(0)` would print. A bill that names a rate the arithmetic
+ * doesn't use is the same class of lie as the one this fixes.
+ */
+export function formatRate(rate: number): string {
+  return `${Number((rate * 100).toFixed(2))}%`;
+}
+
 export function sumLines(lines: readonly { unitPriceCents: number; qty: number }[]): number {
   return lines.reduce((sum, l) => sum + l.unitPriceCents * l.qty, 0);
 }

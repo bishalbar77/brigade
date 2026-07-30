@@ -13,6 +13,7 @@
     "test:watch": "vitest",
     "sql:bundle": "node scripts/bundle-sql.mjs",
     "seed": "tsx --env-file=.env.local supabase/seed/seed.ts",
+    "images": "tsx --env-file=.env.local scripts/fetch-dish-images.ts",
     "verify:data": "tsx --env-file=.env.local scripts/verify-data.ts",
     "verify:features": "node --env-file=.env.local scripts/verify-features.mjs",
     "sql:check": "bash scripts/sql-check.sh",

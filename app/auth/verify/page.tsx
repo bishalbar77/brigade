@@ -40,9 +40,24 @@ function VerifyForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resent, setResent] = useState(false);
+  const [codeError, setCodeError] = useState<string | null>(null);
 
   async function verify(e: React.FormEvent) {
     e.preventDefault();
+
+    // Checked before the round trip: a five-digit code cannot be right, and spending a
+    // second finding that out from the server is a second of doubt for no reason.
+    const entered = code.trim();
+    if (!entered) {
+      setCodeError("Enter the six-digit code from your email.");
+      return;
+    }
+    if (!/^\d{6}$/.test(entered)) {
+      setCodeError("The code is six digits.");
+      return;
+    }
+    setCodeError(null);
+
     setBusy(true);
     setError(null);
 
@@ -113,8 +128,12 @@ function VerifyForm() {
           inputMode="numeric"
           autoComplete="one-time-code"
           required
+          error={codeError}
           value={code}
-          onChange={(e) => setCode(e.target.value)}
+          onChange={(e) => {
+            setCode(e.target.value);
+            setCodeError(null);
+          }}
           hint="Six digits."
         />
         <SubmitButton busy={busy}>Verify</SubmitButton>

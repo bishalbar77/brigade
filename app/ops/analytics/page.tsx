@@ -20,11 +20,25 @@ export const dynamic = "force-dynamic";
 
 const FOOD_COST_BAND = { low: 28, high: 32 };
 
-export default async function AnalyticsPage() {
+export default async function AnalyticsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ sort?: string; dir?: string }>;
+}) {
   const profile = await getCurrentProfile();
   if (!isStaff(profile?.role)) return <StaffOnly what="service numbers" />;
 
-  const { summary, performance, windowDays, showCost, enoughData } = await getAnalytics();
+  const [{ summary, performance, windowDays, showCost, enoughData }, params] =
+    await Promise.all([getAnalytics(), searchParams]);
+
+  // The page owns the URL; MenuMatrix owns the comparators. `#matrix` so a sort does
+  // not throw the reader back to the top of a long page.
+  const matrixSort = params.sort ?? null;
+  const matrixDir = params.dir === "asc" ? "asc" : "desc";
+  const matrixHref = (key: string) =>
+    `/ops/analytics?sort=${key}&dir=${
+      matrixSort === key && matrixDir === "desc" ? "asc" : "desc"
+    }#matrix`;
 
   const foodCost = summary.foodCostPct;
   const foodCostTone =
@@ -116,7 +130,7 @@ export default async function AnalyticsPage() {
           above are still accurate.
         </Empty>
       ) : !showCost || matrix.length === 0 ? null : (
-        <section>
+        <section id="matrix">
           <h2 style={{ fontSize: "var(--text-step-1)", marginBottom: "var(--space-2)" }}>
             Which dishes earn their place
           </h2>
@@ -131,7 +145,12 @@ export default async function AnalyticsPage() {
             The four quadrants are the standard Kasavana&ndash;Smith reading, and each one implies a
             different action.
           </p>
-          <MenuMatrix dishes={matrix} />
+          <MenuMatrix
+            dishes={matrix}
+            sortKey={matrixSort}
+            dir={matrixDir}
+            hrefFor={matrixHref}
+          />
         </section>
       )}
     </div>

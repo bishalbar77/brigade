@@ -39,6 +39,9 @@ export default async function CartPage() {
       tableId={tableId}
       tableLabel={tableLabel}
       portionsByDish={portionsByDish}
+      // The restaurant's real rate, not a literal. place_order() computes tax from this
+      // same column, so the quote and the charge cannot disagree.
+      taxRate={menu.taxRate}
       // No email-verification gate: patch 008 removed it from place_order(), so the UI
       // must not reintroduce one. Signing in is still required, and that IS enforced in
       // the database rather than here.

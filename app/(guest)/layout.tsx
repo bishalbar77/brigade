@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CartAnnouncer } from "@/components/guest/CartAnnouncer";
 import { GuestNav } from "@/components/guest/GuestNav";
 import { getCurrentProfile } from "@/lib/supabase/server";
 
@@ -20,6 +21,15 @@ export default async function GuestLayout({ children }: { children: React.ReactN
       data-density="guest"
       style={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}
     >
+      {/* First tab stop. Without it, a keyboard user walks the whole header on every
+          page before reaching the menu. */}
+      <a href="#main" className="skip-link">
+        Skip to the menu
+      </a>
+
+      {/* One live region for the shell, so adding a dish is not silent. */}
+      <CartAnnouncer />
+
       <header
         style={{
           position: "sticky",
@@ -29,6 +39,9 @@ export default async function GuestLayout({ children }: { children: React.ReactN
           alignItems: "center",
           justifyContent: "space-between",
           gap: "var(--space-4)",
+          // Pinned rather than intrinsic, so /menu's sticky category strip can offset
+          // itself by exactly this much. See --guest-header-h.
+          minHeight: "var(--guest-header-h)",
           padding: "var(--space-3) var(--space-4)",
           borderBottom: "1px solid var(--color-border)",
           background: "color-mix(in oklab, var(--color-bg) 88%, transparent)",
@@ -52,7 +65,7 @@ export default async function GuestLayout({ children }: { children: React.ReactN
         <GuestNav name={profile?.full_name as string | null} />
       </header>
 
-      <main style={{ flex: 1, width: "100%", maxWidth: "40rem", margin: "0 auto" }}>
+      <main id="main" style={{ flex: 1, width: "100%", maxWidth: "40rem", margin: "0 auto" }}>
         {children}
       </main>
 
@@ -65,6 +78,13 @@ export default async function GuestLayout({ children }: { children: React.ReactN
         }}
       >
         <p>Availability updates as the kitchen cooks.</p>
+        {/* The dish photographs are Creative Commons; the licences require a reachable
+            credit, so the link is permanent rather than a nicety. */}
+        <p style={{ marginTop: "var(--space-2)" }}>
+          <Link href="/credits" style={{ color: "inherit" }}>
+            Photo credits
+          </Link>
+        </p>
       </footer>
     </div>
   );

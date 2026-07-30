@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useState } from "react";
 import { Spinner } from "@/components/Busy";
 
 /*
@@ -47,12 +50,38 @@ export function AuthShell({
   );
 }
 
+/**
+ * One labelled input, with its own error message.
+ *
+ * All three forms carry `noValidate` — deliberately, because the browser's own bubbles
+ * cannot be styled and read badly on a phone — but nothing replaced what it turned off.
+ * The result: a malformed email produced no message at all until the server answered,
+ * and `aria-invalid` and `aria-describedby` appeared nowhere in the codebase, so a
+ * screen reader was told neither that a field was wrong nor why.
+ *
+ * The error is announced (`role="alert"`) AND carries a glyph AND changes the border,
+ * so it is never colour alone.
+ */
 export function Field({
   label,
   hint,
+  error,
+  trailing,
   ...props
-}: { label: string; hint?: string } & React.InputHTMLAttributes<HTMLInputElement>) {
+}: {
+  label: string;
+  hint?: string;
+  error?: string | null;
+  /** Rendered inside the input's box — the password show/hide toggle. */
+  trailing?: React.ReactNode;
+} & React.InputHTMLAttributes<HTMLInputElement>) {
   const id = props.id ?? props.name;
+  const hintId = hint ? `${id}-hint` : undefined;
+  const errorId = error ? `${id}-error` : undefined;
+  // Error first: it is the more urgent of the two, and a screen reader reads them in
+  // the order listed here rather than in DOM order.
+  const describedBy = [errorId, hintId].filter(Boolean).join(" ") || undefined;
+
   return (
     <p style={{ marginBottom: "var(--space-4)" }}>
       {/* A real label, never placeholder-only: a placeholder disappears the moment
@@ -60,22 +89,43 @@ export function Field({
       <label htmlFor={id} className="eyebrow" style={{ display: "block", marginBottom: "var(--space-1)" }}>
         {label}
       </label>
-      <input
-        id={id}
-        {...props}
-        style={{
-          width: "100%",
-          minHeight: "48px",
-          padding: "0 var(--space-3)",
-          borderRadius: "var(--radius-md)",
-          border: "1px solid var(--color-border-strong)",
-          background: "var(--color-bg-sunken)",
-          color: "var(--color-fg)",
-          font: "inherit",
-        }}
-      />
+      <span style={{ position: "relative", display: "block" }}>
+        <input
+          id={id}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={describedBy}
+          {...props}
+          style={{
+            width: "100%",
+            minHeight: "48px",
+            padding: trailing ? "0 5.5rem 0 var(--space-3)" : "0 var(--space-3)",
+            borderRadius: "var(--radius-md)",
+            border: `1px solid ${error ? "var(--color-runway-critical)" : "var(--color-border-strong)"}`,
+            background: "var(--color-bg-sunken)",
+            color: "var(--color-fg)",
+            font: "inherit",
+          }}
+        />
+        {trailing}
+      </span>
+      {error && (
+        <span
+          id={errorId}
+          role="alert"
+          style={{
+            display: "block",
+            marginTop: "var(--space-1)",
+            color: "var(--color-runway-critical)",
+            fontSize: "var(--text-step--1)",
+          }}
+        >
+          <span aria-hidden="true">! </span>
+          {error}
+        </span>
+      )}
       {hint && (
         <span
+          id={hintId}
           style={{
             display: "block",
             marginTop: "var(--space-1)",
@@ -88,6 +138,64 @@ export function Field({
       )}
     </p>
   );
+}
+
+/**
+ * A password field you can read back.
+ *
+ * On a phone, in a dim restaurant, typing a password blind into a masked field is the
+ * single most common reason a sign-in fails twice. The toggle is a real button with
+ * `aria-pressed`, not an icon that changes meaning silently.
+ */
+export function PasswordField({
+  label,
+  hint,
+  error,
+  ...props
+}: {
+  label: string;
+  hint?: string;
+  error?: string | null;
+} & Omit<React.InputHTMLAttributes<HTMLInputElement>, "type">) {
+  const [shown, setShown] = useState(false);
+
+  return (
+    <Field
+      label={label}
+      hint={hint}
+      error={error}
+      type={shown ? "text" : "password"}
+      {...props}
+      trailing={
+        <button
+          type="button"
+          aria-pressed={shown}
+          onClick={() => setShown((s) => !s)}
+          style={{
+            position: "absolute",
+            top: 0,
+            right: 0,
+            height: "100%",
+            minHeight: "48px",
+            padding: "0 var(--space-3)",
+            border: "none",
+            background: "none",
+            color: "var(--color-fg-muted)",
+            font: "inherit",
+            fontSize: "var(--text-step--1)",
+            cursor: "pointer",
+          }}
+        >
+          {shown ? "Hide" : "Show"}
+        </button>
+      }
+    />
+  );
+}
+
+/** Shape check only. Whether an address EXISTS is the server's answer, not ours. */
+export function looksLikeEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value.trim());
 }
 
 export function SubmitButton({

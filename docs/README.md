@@ -19,6 +19,7 @@ leave it.
 | 7 | [07-submission.md](07-submission.md) | You're checking rubric coverage or building the deck |
 | 8 | [08-runbook.md](08-runbook.md) | You're setting up, deploying, or running the demo |
 | 9 | [09-flows.md](09-flows.md) | **You want to walk the app as each of the ten people, and prove each step works** |
+| 10 | [10-ui-plan.md](10-ui-plan.md) | You're making the UI more appealing or easier to use — planned work, with the audit findings that motivated it |
 
 Per-feature docs live in [features/](features/) — one file per feature, all on the same template,
 each carrying a `Status: planned | built | cut` field. **Status fields must match reality**; a docs
